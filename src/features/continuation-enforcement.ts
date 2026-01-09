@@ -5,9 +5,11 @@
  * - Monitors todo list for incomplete items
  * - Adds reminders to continue when tasks remain
  * - Prevents premature stopping
+ * - Provides background task execution guidance
  */
 
 import type { HookDefinition, HookContext, HookResult } from '../shared/types.js';
+import { getBackgroundTaskGuidance, DEFAULT_MAX_BACKGROUND_TASKS } from './background-tasks.js';
 
 /**
  * Messages to remind agents to continue
@@ -37,7 +39,7 @@ function getRandomReminder(): string {
 export function createContinuationHook(): HookDefinition {
   return {
     event: 'Stop',
-    handler: async (context: HookContext): Promise<HookResult> => {
+    handler: async (_context: HookContext): Promise<HookResult> => {
       // In a real implementation, this would check the actual todo state
       // For now, we'll provide the structure for integration
 
@@ -97,6 +99,7 @@ CRITICAL RULES - You MUST follow these:
    - Ask the user for clarification
    - Create a verification task
    - Continue investigating rather than stopping prematurely
+${getBackgroundTaskGuidance(DEFAULT_MAX_BACKGROUND_TASKS)}
 `;
 
 /**

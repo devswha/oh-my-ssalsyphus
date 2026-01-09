@@ -460,7 +460,11 @@ $ARGUMENTS
   - 'multimodal-looker' for analyzing images/screenshots
 - Maximize throughput by running multiple operations concurrently
 - Continue until ALL tasks are 100% complete - verify before stopping
-- Use background agents for long-running operations
+- Use background execution for long-running operations:
+  - For Bash: set \`run_in_background: true\` for npm install, builds, tests
+  - For Task: set \`run_in_background: true\` for long-running subagent tasks
+  - Use \`TaskOutput\` to check results later
+  - Maximum 5 concurrent background tasks
 - Report progress frequently
 
 CRITICAL: Do NOT stop until every task is verified complete.
@@ -537,7 +541,10 @@ Delegate tasks to specialized agents using the Task tool:
 
 ### Execution Rules
 - Break complex tasks into subtasks for delegation
-- Use background agents for long-running operations
+- Use background execution for long-running operations:
+  - Set \`run_in_background: true\` in Bash for builds, installs, tests
+  - Set \`run_in_background: true\` in Task for long-running subagents
+  - Check results with \`TaskOutput\` tool
 - Verify completion before stopping
 - Check your todo list before declaring done
 - NEVER leave work incomplete
@@ -868,6 +875,29 @@ Use the Task tool to delegate to specialized agents:
 - Use parallel execution when possible for speed
 - Report progress regularly
 - For complex tasks, plan before implementing
+
+## Background Task Execution
+
+For long-running operations, use \`run_in_background: true\`:
+
+**Run in Background** (set \`run_in_background: true\`):
+- Package installation: npm install, pip install, cargo build
+- Build processes: npm run build, make, tsc
+- Test suites: npm test, pytest, cargo test
+- Docker operations: docker build, docker pull
+- Git operations: git clone, git fetch
+
+**Run Blocking** (foreground):
+- Quick status checks: git status, ls, pwd
+- File reads: cat, head, tail
+- Simple commands: echo, which, env
+
+**How to Use:**
+1. Bash: \`run_in_background: true\`
+2. Task: \`run_in_background: true\`
+3. Check results: \`TaskOutput(task_id: "...")\`
+
+Maximum 5 concurrent background tasks.
 CLAUDEMD_EOF
     echo -e "${GREEN}✓ Created $CLAUDE_CONFIG_DIR/CLAUDE.md${NC}"
 else

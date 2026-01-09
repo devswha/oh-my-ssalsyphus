@@ -18,12 +18,28 @@ import { getAgentDefinitions, sisyphusSystemPrompt } from './agents/definitions.
 import { getDefaultMcpServers, toSdkMcpFormat } from './mcp/servers.js';
 import { createMagicKeywordProcessor, detectMagicKeywords } from './features/magic-keywords.js';
 import { continuationSystemPromptAddition } from './features/continuation-enforcement.js';
+import {
+  createBackgroundTaskManager,
+  shouldRunInBackground as shouldRunInBackgroundFn,
+  type BackgroundTaskManager,
+  type TaskExecutionDecision
+} from './features/background-tasks.js';
 import type { PluginConfig, SessionState } from './shared/types.js';
 
 export { loadConfig, getAgentDefinitions, sisyphusSystemPrompt };
 export { getDefaultMcpServers, toSdkMcpFormat } from './mcp/servers.js';
 export { lspTools, astTools, allCustomTools } from './tools/index.js';
 export { createMagicKeywordProcessor, detectMagicKeywords } from './features/magic-keywords.js';
+export {
+  createBackgroundTaskManager,
+  shouldRunInBackground,
+  getBackgroundTaskGuidance,
+  DEFAULT_MAX_BACKGROUND_TASKS,
+  LONG_RUNNING_PATTERNS,
+  BLOCKING_PATTERNS,
+  type BackgroundTaskManager,
+  type TaskExecutionDecision
+} from './features/background-tasks.js';
 export * from './shared/types.js';
 
 // Command expansion utilities for SDK integration
@@ -80,6 +96,10 @@ export interface SisyphusSession {
   processPrompt: (prompt: string) => string;
   /** Get detected magic keywords in a prompt */
   detectKeywords: (prompt: string) => string[];
+  /** Background task manager for controlling async execution */
+  backgroundTasks: BackgroundTaskManager;
+  /** Check if a command should run in background (convenience method) */
+  shouldRunInBackground: (command: string) => TaskExecutionDecision;
 }
 
 /**
@@ -182,6 +202,9 @@ export function createSisyphusSession(options?: SisyphusOptions): SisyphusSessio
     contextFiles: findContextFiles(options?.workingDirectory)
   };
 
+  // Create background task manager
+  const backgroundTaskManager = createBackgroundTaskManager(state, config);
+
   return {
     queryOptions: {
       options: {
@@ -195,7 +218,13 @@ export function createSisyphusSession(options?: SisyphusOptions): SisyphusSessio
     state,
     config,
     processPrompt,
-    detectKeywords: (prompt: string) => detectMagicKeywords(prompt, config.magicKeywords)
+    detectKeywords: (prompt: string) => detectMagicKeywords(prompt, config.magicKeywords),
+    backgroundTasks: backgroundTaskManager,
+    shouldRunInBackground: (command: string) => shouldRunInBackgroundFn(
+      command,
+      backgroundTaskManager.getRunningCount(),
+      backgroundTaskManager.getMaxTasks()
+    )
   };
 }
 
