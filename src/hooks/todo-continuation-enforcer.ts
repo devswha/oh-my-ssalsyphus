@@ -2,9 +2,16 @@ import type { PluginInput } from "@opencode-ai/plugin";
 import type { BackgroundManager } from "../tools/background-manager";
 import { log } from "../shared/logger";
 import { getMainSessionID } from "../shared/session-state";
+import { getContinuationMessage } from "./continuation-messages";
 
 export interface TodoContinuationEnforcerOptions {
   backgroundManager?: BackgroundManager;
+  /** Countdown seconds before resuming (default: 2) */
+  countdownSeconds?: number;
+  /** Skip countdown if completion percentage is above this threshold */
+  skipCountdownAbovePercent?: number;
+  /** Vary countdown based on task complexity */
+  adaptiveCountdown?: boolean;
 }
 
 interface Todo {
@@ -20,18 +27,17 @@ interface SessionState {
   isRecovering?: boolean;
   countdownStartedAt?: number;
   abortDetectedAt?: number;
+  /** Track consecutive idle events for smarter detection */
+  consecutiveIdleCount?: number;
+  lastIdleAt?: number;
+  /** Message variant index for rotation */
+  messageIndex?: number;
 }
 
-const CONTINUATION_PROMPT = `[SYSTEM REMINDER - TODO CONTINUATION]
-
-Incomplete tasks remain in your todo list. Continue working on the next pending task.
-
-- Proceed without asking for permission
-- Mark each task complete when finished
-- Do not stop until all tasks are done`;
-
-const COUNTDOWN_SECONDS = 2;
+const DEFAULT_COUNTDOWN_SECONDS = 2;
 const TOAST_DURATION_MS = 900;
+/** If idle events happen within this window, consider it a rapid sequence */
+const RAPID_IDLE_WINDOW_MS = 5000;
 
 function getIncompleteCount(todos: Todo[]): number {
   return todos.filter(t => t.status !== "completed" && t.status !== "cancelled").length;
@@ -42,15 +48,56 @@ export function createTodoContinuationEnforcer(
   options: TodoContinuationEnforcerOptions = {}
 ) {
   const { backgroundManager } = options;
+  const countdownSeconds = options.countdownSeconds ?? DEFAULT_COUNTDOWN_SECONDS;
+  const skipAbovePercent = options.skipCountdownAbovePercent ?? 90;
+  const adaptiveCountdown = options.adaptiveCountdown ?? true;
   const sessions = new Map<string, SessionState>();
 
   function getState(sessionID: string): SessionState {
     let state = sessions.get(sessionID);
     if (!state) {
-      state = {};
+      state = { consecutiveIdleCount: 0, messageIndex: 0 };
       sessions.set(sessionID, state);
     }
     return state;
+  }
+
+  /** Calculate adaptive countdown based on task state */
+  function getAdaptiveCountdown(
+    todos: Todo[],
+    state: SessionState
+  ): number {
+    if (!adaptiveCountdown) return countdownSeconds;
+
+    const total = todos.length;
+    const completed = todos.filter(t => t.status === "completed").length;
+    const percentComplete = total > 0 ? (completed / total) * 100 : 0;
+
+    // Skip countdown if almost done (above threshold)
+    if (percentComplete >= skipAbovePercent) {
+      log(`Skipping countdown: ${percentComplete.toFixed(0)}% complete`);
+      return 0;
+    }
+
+    // Reduce countdown for rapid consecutive idles (agent is clearly working)
+    if (state.consecutiveIdleCount && state.consecutiveIdleCount > 2) {
+      return Math.max(1, countdownSeconds - 1);
+    }
+
+    // Check if there's an in-progress task (agent might be mid-task)
+    const hasInProgress = todos.some(t => t.status === "in_progress");
+    if (hasInProgress) {
+      // Shorter countdown if clearly mid-task
+      return Math.max(1, countdownSeconds - 1);
+    }
+
+    return countdownSeconds;
+  }
+
+  /** Get the next pending task for context */
+  function getNextPendingTask(todos: Todo[]): string | undefined {
+    const pending = todos.find(t => t.status === "pending" || t.status === "in_progress");
+    return pending?.content;
   }
 
   function cancelCountdown(sessionID: string): void {
@@ -122,10 +169,26 @@ export function createTodoContinuationEnforcer(
     const freshIncompleteCount = getIncompleteCount(todos);
     if (freshIncompleteCount === 0) {
       log(`Skipped injection: no incomplete todos`, { sessionID });
+      // Reset consecutive idle count on completion
+      if (state) state.consecutiveIdleCount = 0;
       return;
     }
 
-    const prompt = `${CONTINUATION_PROMPT}\n\n[Status: ${todos.length - freshIncompleteCount}/${todos.length} completed, ${freshIncompleteCount} remaining]`;
+    const completedCount = todos.length - freshIncompleteCount;
+    const nextTask = getNextPendingTask(todos);
+
+    // Get varied continuation message
+    const prompt = getContinuationMessage({
+      completedCount,
+      totalCount: todos.length,
+      nextTask,
+      mode: "todo",
+    });
+
+    // Increment message index for next time
+    if (state) {
+      state.messageIndex = ((state.messageIndex ?? 0) + 1) % 5;
+    }
 
     try {
       log(`Injecting continuation`, { sessionID, incompleteCount: freshIncompleteCount });
@@ -144,11 +207,20 @@ export function createTodoContinuationEnforcer(
     }
   }
 
-  function startCountdown(sessionID: string, incompleteCount: number): void {
+  function startCountdown(sessionID: string, incompleteCount: number, todos: Todo[]): void {
     const state = getState(sessionID);
     cancelCountdown(sessionID);
 
-    let secondsRemaining = COUNTDOWN_SECONDS;
+    // Calculate adaptive countdown
+    const actualCountdown = getAdaptiveCountdown(todos, state);
+
+    // If countdown is 0, inject immediately
+    if (actualCountdown === 0) {
+      injectContinuation(sessionID, incompleteCount);
+      return;
+    }
+
+    let secondsRemaining = actualCountdown;
     showCountdownToast(secondsRemaining, incompleteCount);
     state.countdownStartedAt = Date.now();
 
@@ -162,9 +234,9 @@ export function createTodoContinuationEnforcer(
     state.countdownTimer = setTimeout(() => {
       cancelCountdown(sessionID);
       injectContinuation(sessionID, incompleteCount);
-    }, COUNTDOWN_SECONDS * 1000);
+    }, actualCountdown * 1000);
 
-    log(`Countdown started`, { sessionID, seconds: COUNTDOWN_SECONDS, incompleteCount });
+    log(`Countdown started`, { sessionID, seconds: actualCountdown, incompleteCount });
   }
 
   const handler = async ({ event }: { event: { type: string; properties?: unknown } }): Promise<void> => {
@@ -200,6 +272,15 @@ export function createTodoContinuationEnforcer(
       }
 
       const state = getState(sessionID);
+
+      // Track consecutive idle events for smarter detection
+      const now = Date.now();
+      if (state.lastIdleAt && (now - state.lastIdleAt) < RAPID_IDLE_WINDOW_MS) {
+        state.consecutiveIdleCount = (state.consecutiveIdleCount ?? 0) + 1;
+      } else {
+        state.consecutiveIdleCount = 1;
+      }
+      state.lastIdleAt = now;
 
       if (state.isRecovering) {
         log(`Skipped: in recovery`, { sessionID });
@@ -242,10 +323,11 @@ export function createTodoContinuationEnforcer(
       const incompleteCount = getIncompleteCount(todos);
       if (incompleteCount === 0) {
         log(`All todos complete`, { sessionID, total: todos.length });
+        state.consecutiveIdleCount = 0; // Reset on completion
         return;
       }
 
-      startCountdown(sessionID, incompleteCount);
+      startCountdown(sessionID, incompleteCount, todos);
       return;
     }
 

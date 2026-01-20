@@ -2,25 +2,30 @@ import type { PluginInput } from "@opencode-ai/plugin";
 import { log } from "../shared/logger";
 import type { RalphLoopConfig } from "../config";
 import type { ActiveMode } from "./system-prompt-injector";
-import * as fs from "fs";
+import { getContinuationMessage } from "./continuation-messages";
+import {
+  readRalphState,
+  writeRalphState,
+  clearRalphState,
+  createRalphState,
+  updateRalphStateIteration,
+  markRalphStateComplete,
+} from "../state/ralph-state";
+import {
+  readPrd as readPrdFromManager,
+  writePrd as writePrdFromManager,
+  createPrdFromTask,
+  getNextStory,
+  getPrdStatus,
+  generateStoryContextPrompt,
+  type PRD,
+  type UserStory,
+} from "../prd/prd-manager";
+import { initializeProgress, formatProgressContext } from "../prd/progress-tracker";
 import * as path from "path";
 
-export interface UserStory {
-  id: string;
-  title: string;
-  description?: string;
-  acceptanceCriteria: string[];
-  priority: number;
-  passes: boolean;
-  notes?: string;
-}
-
-export interface PRD {
-  project: string;
-  branchName?: string;
-  description: string;
-  userStories: UserStory[];
-}
+// Re-export types for backward compatibility
+export type { PRD, UserStory };
 
 interface RalphLoopState {
   sessionID: string;
@@ -43,7 +48,6 @@ const states = new Map<string, RalphLoopState>();
 const COMPLETION_PROMISE = "<promise>TASK_COMPLETE</promise>";
 const LEGACY_COMPLETION_PROMISE = "<promise>DONE</promise>";
 const PRD_FILENAME = "prd.json";
-const PROGRESS_FILENAME = "progress.txt";
 
 export function createRalphLoopHook(ctx: PluginInput, options: RalphLoopOptions = {}) {
   const maxIterations = options.config?.default_max_iterations ?? 50;
@@ -57,71 +61,42 @@ export function createRalphLoopHook(ctx: PluginInput, options: RalphLoopOptions 
     return path.join(getSisyphusDir(), PRD_FILENAME);
   };
 
-  const getProgressPath = (): string => {
-    return path.join(getSisyphusDir(), PROGRESS_FILENAME);
-  };
-
-  const ensureSisyphusDir = (): void => {
-    const dir = getSisyphusDir();
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  };
-
+  // Use the new PRD manager functions
   const readPrd = (): PRD | null => {
-    const prdPath = getPrdPath();
-    if (!fs.existsSync(prdPath)) return null;
-    try {
-      const content = fs.readFileSync(prdPath, "utf-8");
-      return JSON.parse(content) as PRD;
-    } catch {
-      return null;
-    }
+    return readPrdFromManager(ctx.directory);
   };
 
   const writePrd = (prd: PRD): void => {
-    ensureSisyphusDir();
-    fs.writeFileSync(getPrdPath(), JSON.stringify(prd, null, 2));
+    writePrdFromManager(ctx.directory, prd);
   };
 
-  const initializeProgress = (task: string): void => {
-    ensureSisyphusDir();
-    const progressPath = getProgressPath();
-    if (!fs.existsSync(progressPath)) {
-      const content = `# Ralph Progress Log
-Started: ${new Date().toISOString()}
-Task: ${task}
+  // Restore state from file on initialization
+  const restorePersistedState = (): void => {
+    const persistedState = readRalphState(ctx.directory);
+    if (persistedState && persistedState.active) {
+      log(`Restoring ralph loop from persisted state`, {
+        iteration: persistedState.iteration,
+        sessionId: persistedState.session_id,
+      });
 
-## Codebase Patterns
-(No patterns discovered yet)
+      const state: RalphLoopState = {
+        sessionID: persistedState.session_id,
+        prompt: persistedState.prompt,
+        iteration: persistedState.iteration,
+        maxIterations: persistedState.max_iterations,
+        completionPromise: persistedState.completion_promise,
+        isActive: true,
+        startedAt: new Date(persistedState.started_at).getTime(),
+        mode: persistedState.prd_mode ? "ralph-loop" : "ralph-loop",
+        prdPath: getPrdPath(),
+      };
 
----
-
-`;
-      fs.writeFileSync(progressPath, content);
+      states.set(persistedState.session_id, state);
     }
   };
 
-  const createInitialPrd = (task: string): PRD => {
-    return {
-      project: "Ralph Loop Task",
-      description: task,
-      userStories: [
-        {
-          id: "US-001",
-          title: "Complete the requested task",
-          description: task,
-          acceptanceCriteria: [
-            "Task is fully implemented",
-            "All tests pass (if applicable)",
-            "No errors or warnings",
-          ],
-          priority: 1,
-          passes: false,
-        },
-      ],
-    };
-  };
+  // Try to restore state on hook creation
+  restorePersistedState();
 
   const startLoop = (
     sessionID: string,
@@ -145,11 +120,11 @@ Task: ${task}
 
     let prd = readPrd();
     if (!prd) {
-      prd = createInitialPrd(prompt);
+      prd = createPrdFromTask(prompt);
       writePrd(prd);
       log(`Created initial PRD`, { sessionID });
     }
-    initializeProgress(prompt);
+    initializeProgress(ctx.directory, prompt);
 
     const state: RalphLoopState = {
       sessionID,
@@ -164,6 +139,15 @@ Task: ${task}
     };
 
     states.set(sessionID, state);
+
+    // Persist state to file for cross-session recovery
+    const persistedState = createRalphState(
+      sessionID,
+      prompt,
+      state.maxIterations,
+      true // prd_mode
+    );
+    writeRalphState(ctx.directory, persistedState);
 
     options.onModeChange?.(sessionID, mode, prompt);
 
@@ -196,6 +180,10 @@ Task: ${task}
     }
 
     states.delete(sessionID);
+
+    // Clear persisted state
+    clearRalphState(ctx.directory);
+
     options.onModeChange?.(sessionID, null);
 
     log(`Ralph loop cancelled`, { sessionID, iteration: state.iteration });
@@ -245,12 +233,29 @@ Task: ${task}
 
       state.iteration++;
 
+      // Update persisted state
+      const prd = readPrd();
+      const nextStory = prd ? getNextStory(prd) : null;
+      updateRalphStateIteration(ctx.directory, {
+        active: true,
+        iteration: state.iteration,
+        max_iterations: state.maxIterations,
+        completion_promise: state.completionPromise,
+        started_at: new Date(state.startedAt).toISOString(),
+        prompt: state.prompt,
+        session_id: sessionID,
+        prd_mode: true,
+        current_story_id: nextStory?.id ?? null,
+        last_activity_at: new Date().toISOString(),
+      }, nextStory?.id);
+
       if (state.iteration >= state.maxIterations) {
         log(`Ralph loop max iterations reached`, {
           sessionID,
           iteration: state.iteration,
         });
         states.delete(sessionID);
+        clearRalphState(ctx.directory);
         options.onModeChange?.(sessionID, null);
 
         ctx.client.tui
@@ -266,35 +271,37 @@ Task: ${task}
         return;
       }
 
-      const prd = readPrd();
-      const incompleteStories = prd?.userStories.filter((s) => !s.passes) ?? [];
-      const prdStatus = prd
-        ? `PRD Status: ${prd.userStories.filter((s) => s.passes).length}/${prd.userStories.length} stories complete`
-        : "No PRD found - create one to track progress";
-
-      const nextStory = incompleteStories[0];
-      const nextStoryHint = nextStory
-        ? `\nNext story: ${nextStory.id} - ${nextStory.title}`
-        : "";
+      const prdStatus = prd ? getPrdStatus(prd) : null;
+      const progressContext = formatProgressContext(ctx.directory);
 
       log(`Ralph loop continuing`, {
         sessionID,
         iteration: state.iteration,
         maxIterations: state.maxIterations,
-        incompleteStories: incompleteStories.length,
+        incompleteStories: prdStatus?.remaining ?? 0,
       });
 
-      const continuePrompt = `[RALPH LOOP CONTINUATION - Iteration ${state.iteration}/${state.maxIterations}]
+      // Use varied continuation messages
+      const continuePrompt = getContinuationMessage({
+        completedCount: prdStatus?.completed ?? 0,
+        totalCount: prdStatus?.total ?? 1,
+        nextTask: nextStory ? `${nextStory.id} - ${nextStory.title}` : undefined,
+        iteration: state.iteration,
+        maxIterations: state.maxIterations,
+        mode: state.mode,
+      });
 
-${prdStatus}${nextStoryHint}
-
-You stopped without completing your promise. The work is NOT done yet.
-Continue working on incomplete items. Do not stop until you can truthfully output:
-\`${state.completionPromise}\`
+      // Add PRD context
+      const prdContext = prd ? generateStoryContextPrompt(prd) : "";
+      const fullPrompt = `${continuePrompt}
 
 Original task: ${state.prompt}
 
-**REMINDER**: 
+${prdContext}
+
+${progressContext}
+
+**REMINDER**:
 - Check .sisyphus/prd.json for user stories
 - Update story "passes" to true when complete
 - Log learnings in .sisyphus/progress.txt
@@ -304,7 +311,7 @@ Original task: ${state.prompt}
         await ctx.client.session.prompt({
           path: { id: sessionID },
           body: {
-            parts: [{ type: "text", text: continuePrompt }],
+            parts: [{ type: "text", text: fullPrompt }],
           },
           query: { directory: ctx.directory },
         });
@@ -345,6 +352,21 @@ Original task: ${state.prompt}
         if (checkCompletionInContent(content)) {
           log(`Ralph loop completion detected`, { sessionID });
           states.delete(sessionID);
+
+          // Mark persisted state as complete
+          markRalphStateComplete(ctx.directory, {
+            active: false,
+            iteration: state.iteration,
+            max_iterations: state.maxIterations,
+            completion_promise: state.completionPromise,
+            started_at: new Date(state.startedAt).toISOString(),
+            prompt: state.prompt,
+            session_id: sessionID,
+            prd_mode: true,
+            current_story_id: null,
+            last_activity_at: new Date().toISOString(),
+          });
+
           options.onModeChange?.(sessionID, null);
 
           const duration = Date.now() - state.startedAt;

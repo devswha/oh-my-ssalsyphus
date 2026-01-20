@@ -92,9 +92,9 @@ omo-omcs (OpenCode):
 
 ## Feature Roadmap
 
-### Phase 1: State Persistence (Priority: High)
+### Phase 1: State Persistence (Priority: High) ✅ COMPLETED
 
-#### 1.1 File-Based Ultrawork State
+#### 1.1 File-Based Ultrawork State ✅
 ```typescript
 // Location: .sisyphus/ultrawork-state.json
 {
@@ -108,13 +108,13 @@ omo-omcs (OpenCode):
 ```
 
 Tasks:
-- [ ] Create `src/state/ultrawork-state.ts`
-- [ ] Write state on mode activation
-- [ ] Read state on plugin init (resume interrupted sessions)
-- [ ] Clear state on completion or `/cancel-ultrawork`
-- [ ] Add global state at `~/.opencode/ultrawork-state.json`
+- [x] Create `src/state/ultrawork-state.ts`
+- [x] Write state on mode activation
+- [x] Read state on plugin init (resume interrupted sessions)
+- [x] Clear state on completion or `/cancel-ultrawork`
+- [x] Add global state at `~/.opencode/ultrawork-state.json`
 
-#### 1.2 File-Based Ralph State
+#### 1.2 File-Based Ralph State ✅
 ```typescript
 // Location: .sisyphus/ralph-state.json
 {
@@ -131,15 +131,15 @@ Tasks:
 ```
 
 Tasks:
-- [ ] Update `src/hooks/ralph-loop.ts` to persist state
-- [ ] Implement iteration tracking
-- [ ] Resume from last iteration on restart
+- [x] Update `src/hooks/ralph-loop.ts` to persist state
+- [x] Implement iteration tracking
+- [x] Resume from last iteration on restart
 
 ---
 
-### Phase 2: PRD Enhancement (Priority: High)
+### Phase 2: PRD Enhancement (Priority: High) ✅ COMPLETED
 
-#### 2.1 Full PRD Structure
+#### 2.1 Full PRD Structure ✅
 ```typescript
 // Location: .sisyphus/prd.json
 {
@@ -158,7 +158,7 @@ Tasks:
       "passes": true
     },
     {
-      "id": "US-002", 
+      "id": "US-002",
       "title": "User login",
       "acceptanceCriteria": ["JWT generation", "Token validation"],
       "priority": 2,
@@ -169,12 +169,12 @@ Tasks:
 ```
 
 Tasks:
-- [ ] Create `src/prd/prd-manager.ts`
-- [ ] Auto-generate PRD from task description
-- [ ] Track story completion status
-- [ ] Inject current story context into prompts
+- [x] Create `src/prd/prd-manager.ts`
+- [x] Auto-generate PRD from task description
+- [x] Track story completion status
+- [x] Inject current story context into prompts
 
-#### 2.2 Progress Tracking
+#### 2.2 Progress Tracking ✅
 ```
 // Location: .sisyphus/progress.txt
 
@@ -197,16 +197,16 @@ Learnings:
 ```
 
 Tasks:
-- [ ] Create `src/prd/progress-tracker.ts`
-- [ ] Append progress after each story completion
-- [ ] Record discovered patterns
-- [ ] Inject progress context into continuation prompts
+- [x] Create `src/prd/progress-tracker.ts`
+- [x] Append progress after each story completion
+- [x] Record discovered patterns
+- [x] Inject progress context into continuation prompts
 
 ---
 
-### Phase 3: Oracle Verification (Priority: Medium)
+### Phase 3: Oracle Verification (Priority: Medium) ✅ COMPLETED
 
-#### 3.1 Verification Flow
+#### 3.1 Verification Flow ✅
 ```
 Agent outputs <promise>TASK_COMPLETE</promise>
     ↓
@@ -225,13 +225,13 @@ If REJECTED: Continue working with Oracle's feedback
 ```
 
 Tasks:
-- [ ] Create `src/hooks/ralph-verifier.ts`
-- [ ] Detect completion promise in assistant messages
-- [ ] Spawn Oracle for verification
-- [ ] Handle approval/rejection flow
-- [ ] Track verification attempts (max 3)
+- [x] Create `src/hooks/ralph-verifier.ts`
+- [x] Detect completion promise in assistant messages
+- [x] Spawn Oracle for verification
+- [x] Handle approval/rejection flow
+- [x] Track verification attempts (max 3)
 
-#### 3.2 Verification State
+#### 3.2 Verification State ✅
 ```typescript
 // Location: .sisyphus/ralph-verification.json
 {
@@ -246,32 +246,36 @@ Tasks:
 
 ---
 
-### Phase 4: Enhanced Continuation (Priority: Medium)
+### Phase 4: Enhanced Continuation (Priority: Medium) ✅ COMPLETED
 
-#### 4.1 Smarter Idle Detection
+#### 4.1 Smarter Idle Detection ✅
 
 Current: Fixed 2-second countdown after `session.idle`
 
 Improved:
-- [ ] Detect partial completion (some todos done, some pending)
-- [ ] Vary countdown based on task complexity
-- [ ] Skip countdown if agent is clearly mid-task
+- [x] Detect partial completion (some todos done, some pending)
+- [x] Vary countdown based on task complexity
+- [x] Skip countdown if agent is clearly mid-task (>90% complete)
+- [x] Track consecutive idle events for rapid sequence detection
+- [x] Adaptive countdown based on in-progress tasks
 
-#### 4.2 Continuation Message Variants
+#### 4.2 Continuation Message Variants ✅
 
 ```typescript
 const CONTINUATION_MESSAGES = [
   "[SYSTEM REMINDER - TODO CONTINUATION] ...",
   "[THE BOULDER NEVER STOPS] ...",
   "[SISYPHUS REMINDER] ...",
-  "[CONTINUATION REQUIRED] ..."
+  "[CONTINUATION REQUIRED] ...",
+  "[TASK PERSISTENCE ACTIVE] ..."
 ];
 ```
 
 Tasks:
-- [ ] Add message variety to prevent pattern fatigue
-- [ ] Include specific next task in message
-- [ ] Show progress summary (X/Y completed)
+- [x] Add message variety to prevent pattern fatigue
+- [x] Include specific next task in message
+- [x] Show progress summary (X/Y completed)
+- [x] Different messages for todo, ralph-loop, and ultrawork-ralph modes
 
 ---
 
@@ -309,19 +313,19 @@ Feature request for OpenCode plugin API:
 
 ## Comparison: oh-my-claude-sisyphus vs omo-omcs
 
-| Feature | oh-my-claude-sisyphus | omo-omcs Current | omo-omcs Target |
-|---------|----------------------|------------------|-----------------|
+| Feature | oh-my-claude-sisyphus | omo-omcs Current | Status |
+|---------|----------------------|------------------|--------|
 | Stop Hook | ✅ Native | ❌ Not available | ⏳ Request from OpenCode |
 | System Prompt Injection | ✅ Bash hooks | ✅ `experimental.chat.system.transform` | ✅ Done |
 | Ultrawork Mode | ✅ | ✅ | ✅ Done |
 | Ralph Loop | ✅ | ✅ | ✅ Done |
 | Ultrawork-Ralph | ✅ | ✅ | ✅ Done |
-| File-Based State | ✅ | ❌ In-memory | 🔲 Phase 1 |
-| PRD Support | ✅ Full | ⚠️ Partial | 🔲 Phase 2 |
-| Progress Tracking | ✅ | ❌ | 🔲 Phase 2 |
-| Oracle Verification | ✅ | ❌ | 🔲 Phase 3 |
-| Continuation Messages | ✅ Varied | ⚠️ Single | 🔲 Phase 4 |
-| Cross-Session State | ✅ ~/.claude/ | ❌ | 🔲 Phase 1 |
+| File-Based State | ✅ | ✅ Full | ✅ Done (Phase 1) |
+| PRD Support | ✅ Full | ✅ Full | ✅ Done (Phase 2) |
+| Progress Tracking | ✅ | ✅ | ✅ Done (Phase 2) |
+| Oracle Verification | ✅ | ✅ | ✅ Done (Phase 3) |
+| Continuation Messages | ✅ Varied | ✅ Varied | ✅ Done (Phase 4) |
+| Cross-Session State | ✅ ~/.claude/ | ✅ ~/.opencode/ | ✅ Done (Phase 1) |
 
 ---
 
