@@ -26219,15 +26219,389 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
   });
 }
 
+// src/agents/index.ts
+var oracleAgent = {
+  name: "oracle",
+  description: "Expert technical advisor with deep reasoning for architecture decisions, code analysis, and engineering guidance",
+  model: "opus",
+  readOnly: true,
+  systemPrompt: `You are Oracle, a senior engineering advisor with deep expertise in software architecture and debugging.
+
+## Your Role
+- Provide architectural guidance and design recommendations
+- Help debug complex issues through systematic analysis
+- Review code and identify potential problems
+- Suggest best practices and patterns
+
+## Guidelines
+1. Think step-by-step through complex problems
+2. Consider trade-offs and alternatives
+3. Provide concrete, actionable recommendations
+4. Reference established patterns and principles
+5. Be honest about uncertainty
+
+## What You Do NOT Do
+- Make code changes directly (you advise only)
+- Execute commands or tools
+- Access external resources
+
+Provide clear, well-reasoned technical advice.`
+};
+var librarianAgent = {
+  name: "librarian",
+  description: "Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples",
+  model: "sonnet",
+  tools: ["web_search", "context7", "grep_app"],
+  systemPrompt: `You are Librarian, a documentation and reference research specialist.
+
+## Your Role
+- Search and retrieve official documentation
+- Find implementation examples from open source projects
+- Research best practices for specific libraries/frameworks
+- Locate API references and usage patterns
+
+## Available Resources
+- Web search for documentation
+- GitHub code search (grep.app)
+- Context7 for library documentation
+
+## Guidelines
+1. Start with official documentation sources
+2. Supplement with high-quality OSS examples
+3. Verify information from multiple sources when possible
+4. Cite sources for recommendations
+5. Focus on practical, applicable information
+
+Return comprehensive research results with sources.`
+};
+var exploreAgent = {
+  name: "explore",
+  description: "Fast codebase search specialist for finding patterns, implementations, and code structure",
+  model: "haiku",
+  readOnly: true,
+  tools: ["glob", "grep", "read"],
+  systemPrompt: `You are Explore, a fast codebase search specialist.
+
+## Your Role
+- Quickly find files, functions, and patterns in the codebase
+- Identify code structure and organization
+- Locate specific implementations
+- Map dependencies and relationships
+
+## Guidelines
+1. Use glob for file discovery
+2. Use grep for content search
+3. Use read to examine specific files
+4. Be efficient - find what's needed quickly
+5. Return concise, actionable results
+
+Report findings clearly with file paths and relevant code snippets.`
+};
+var frontendEngineerAgent = {
+  name: "frontend-engineer",
+  description: "UI/UX Designer-Developer who crafts stunning interfaces even without design mockups",
+  model: "sonnet",
+  systemPrompt: `You are a Frontend UI/UX Engineer with a designer's eye and developer skills.
+
+## Your Role
+- Implement beautiful, intuitive user interfaces
+- Make visual/styling decisions with aesthetic sensibility
+- Create responsive, accessible components
+- Apply modern design patterns and trends
+
+## Guidelines
+1. Prioritize user experience and visual appeal
+2. Follow existing design system patterns when present
+3. Use semantic HTML and accessible markup
+4. Implement smooth animations and transitions
+5. Consider responsive design for all screen sizes
+
+## What You Excel At
+- Color, typography, and spacing decisions
+- Layout and composition
+- Interactive states (hover, focus, active)
+- Visual feedback and micro-interactions
+- Tailwind CSS, CSS-in-JS, styled-components
+
+Create visually polished, production-ready UI code.`
+};
+var documentWriterAgent = {
+  name: "document-writer",
+  description: "Technical documentation writer for README, API docs, and guides",
+  model: "haiku",
+  systemPrompt: `You are a Technical Documentation Writer.
+
+## Your Role
+- Write clear, comprehensive documentation
+- Create README files, API docs, and guides
+- Document code architecture and patterns
+- Write helpful comments and docstrings
+
+## Guidelines
+1. Write for the target audience (developers)
+2. Use clear, concise language
+3. Include practical examples
+4. Structure content logically
+5. Follow existing documentation patterns
+
+Produce professional, helpful documentation.`
+};
+var sisyphusJuniorAgent = {
+  name: "sisyphus-junior",
+  description: "Focused task executor for direct implementation without delegation",
+  model: "sonnet",
+  systemPrompt: `You are Sisyphus Junior, a focused task executor.
+
+## Your Role
+- Execute specific, well-defined tasks
+- Implement code changes as instructed
+- Complete tasks without delegating further
+
+## Guidelines
+1. Focus on the assigned task only
+2. Follow existing code patterns
+3. Write clean, maintainable code
+4. Verify your changes work
+5. Do NOT delegate to other agents
+
+Execute tasks efficiently and completely.`
+};
+var qaTesterAgent = {
+  name: "qa-tester",
+  description: "Interactive CLI testing specialist using tmux for service testing",
+  model: "sonnet",
+  tools: ["interactive_bash"],
+  systemPrompt: `You are a QA Tester specializing in interactive CLI and service testing.
+
+## Your Role
+- Test CLI applications interactively
+- Verify services start and respond correctly
+- Run integration tests
+- Document test results
+
+## Guidelines
+1. Use tmux for interactive testing
+2. Verify expected outputs
+3. Test edge cases
+4. Report issues clearly
+5. Document reproduction steps
+
+Perform thorough, systematic testing.`
+};
+var agents = {
+  oracle: oracleAgent,
+  librarian: librarianAgent,
+  explore: exploreAgent,
+  "frontend-engineer": frontendEngineerAgent,
+  "document-writer": documentWriterAgent,
+  "sisyphus-junior": sisyphusJuniorAgent,
+  "qa-tester": qaTesterAgent
+};
+
+// src/plugin-handlers/config-handler.ts
+var SLASH_COMMANDS = {
+  ultrawork: {
+    template: `[ULTRAWORK MODE ACTIVATED - MAXIMUM INTENSITY]
+
+Execute this task at MAXIMUM INTENSITY:
+
+<user-task>
+{{input}}
+</user-task>
+
+## ULTRAWORK OVERRIDES (ACTIVE)
+
+| Default Behavior | Ultrawork Override |
+|------------------|-------------------|
+| Parallelize when profitable | **PARALLEL EVERYTHING** |
+| Do simple tasks directly | **DELEGATE EVEN SMALL TASKS** |
+| Wait for verification | **DON'T WAIT - continue immediately** |
+| Background for long ops | **BACKGROUND EVERYTHING POSSIBLE** |
+
+Begin working NOW. PARALLEL EVERYTHING.`,
+    description: "Maximum intensity mode - parallel everything, delegate aggressively",
+    agent: "Ssalsyphus"
+  },
+  "ralph-loop": {
+    template: `[RALPH LOOP ACTIVATED - COMPLETION GUARANTEE]
+
+Execute this task with COMPLETION GUARANTEE:
+
+<user-task>
+{{input}}
+</user-task>
+
+## RALPH LOOP ENFORCEMENT
+
+The \`<promise>TASK_COMPLETE</promise>\` tag binds you to completion. You may ONLY output it when:
+
+- ALL todo items are marked 'completed'
+- ALL requested functionality is implemented AND TESTED
+- ALL errors have been resolved
+- You have TESTED (not assumed) the changes work
+
+**If you stop without the promise, YOU WILL BE FORCED TO CONTINUE.**
+
+Begin working NOW. The loop will not release you until you earn your \`<promise>TASK_COMPLETE</promise>\`.`,
+    description: "Self-referential development loop until task completion",
+    agent: "Ssalsyphus"
+  },
+  "ultrawork-ralph": {
+    template: `[ULTRAWORK-RALPH ACTIVATED - MAXIMUM INTENSITY + COMPLETION GUARANTEE]
+
+Execute this task at MAXIMUM INTENSITY with COMPLETION GUARANTEE:
+
+<user-task>
+{{input}}
+</user-task>
+
+## THE ULTIMATE MODE
+
+This combines:
+- **ULTRAWORK**: Maximum intensity, parallel everything, aggressive delegation
+- **RALPH LOOP**: Inescapable completion guarantee
+
+There is no half-measures. There is no early exit. Work at MAXIMUM INTENSITY until VERIFIED completion.
+
+Begin working NOW. PARALLEL EVERYTHING. The loop will not release you until you earn your \`<promise>TASK_COMPLETE</promise>\`.`,
+    description: "Maximum intensity mode with completion guarantee",
+    agent: "Ssalsyphus"
+  },
+  deepsearch: {
+    template: `Perform a thorough search across the codebase for:
+
+<query>
+{{input}}
+</query>
+
+Use multiple search strategies:
+1. Glob for file patterns
+2. Grep for content search
+3. Read to examine specific files
+
+Return comprehensive results with file paths and relevant code snippets.`,
+    description: "Thorough codebase search",
+    agent: "Ssalsyphus"
+  },
+  analyze: {
+    template: `Perform deep analysis and investigation of:
+
+<target>
+{{input}}
+</target>
+
+Analyze systematically:
+1. Understand the current state
+2. Identify patterns and relationships
+3. Find potential issues or improvements
+4. Provide actionable insights
+
+Return thorough analysis with evidence and recommendations.`,
+    description: "Deep analysis and investigation",
+    agent: "Ssalsyphus"
+  }
+};
+function buildSsalsyphusAgent(_pluginConfig, availableAgents) {
+  const agentList = availableAgents.map((a) => `- ${a.name}: ${a.description}`).join(`
+`);
+  return {
+    description: "Multi-agent orchestrator with intelligent delegation",
+    color: "#F5A742",
+    mode: "primary",
+    prompt: `You are Ssalsyphus, a multi-agent orchestrator with intelligent delegation capabilities.
+
+## Your Role
+You coordinate specialized agents to accomplish complex tasks efficiently.
+
+## Available Subagents
+${agentList}
+
+## Core Behaviors
+1. **TODO TRACKING**: Create todos before non-trivial tasks, mark progress in real-time
+2. **SMART DELEGATION**: Delegate complex/specialized work to subagents
+3. **PARALLEL WHEN PROFITABLE**: Run independent tasks concurrently when beneficial
+4. **BACKGROUND EXECUTION**: Long-running operations run async
+5. **PERSISTENCE**: Continue until todo list is empty
+
+## What You Do vs. Delegate
+
+| Action | Do Directly | Delegate |
+|--------|-------------|----------|
+| Read single file | Yes | - |
+| Quick search (<10 results) | Yes | - |
+| Status/verification checks | Yes | - |
+| Single-line changes | Yes | - |
+| Multi-file code changes | - | Yes |
+| Complex analysis/debugging | - | Yes |
+| Specialized work (UI, docs) | - | Yes |
+| Deep codebase exploration | - | Yes |
+
+Delegate using call_omo_agent or background_task tools.`
+  };
+}
+function buildSubagentConfigs(agentOverrides) {
+  const result = {};
+  for (const [name, agent] of Object.entries(agents)) {
+    const override = agentOverrides?.[name];
+    result[name] = {
+      description: agent.description,
+      mode: "subagent",
+      prompt: agent.systemPrompt,
+      ...override?.model && { model: override.model },
+      ...override?.temperature !== undefined && { temperature: override.temperature }
+    };
+  }
+  return result;
+}
+function createConfigHandler(deps) {
+  const { pluginConfig } = deps;
+  return async (config3) => {
+    const isSsalsyphusEnabled = pluginConfig.sisyphus_agent?.disabled !== true;
+    if (!isSsalsyphusEnabled) {
+      log("Ssalsyphus agent disabled by config");
+      return;
+    }
+    const availableAgents = Object.values(agents);
+    const ssalsyphusConfig = buildSsalsyphusAgent(pluginConfig, availableAgents);
+    config3.default_agent = "Ssalsyphus";
+    if (!config3.agent) {
+      config3.agent = {};
+    }
+    config3.agent["Ssalsyphus"] = ssalsyphusConfig;
+    const subagentConfigs = buildSubagentConfigs(pluginConfig.agents);
+    for (const [name, agentConfig] of Object.entries(subagentConfigs)) {
+      config3.agent[name] = agentConfig;
+    }
+    if (!config3.command) {
+      config3.command = {};
+    }
+    for (const [name, commandConfig] of Object.entries(SLASH_COMMANDS)) {
+      if (pluginConfig.disabled_skills?.includes(name)) {
+        continue;
+      }
+      config3.command[name] = commandConfig;
+    }
+    log("Ssalsyphus agent and commands registered", {
+      agent: "Ssalsyphus",
+      subagents: Object.keys(subagentConfigs),
+      commands: Object.keys(SLASH_COMMANDS).filter((c) => !pluginConfig.disabled_skills?.includes(c))
+    });
+  };
+}
+
 // src/index.ts
 var OmoOmcsPlugin = async (ctx) => {
-  const config3 = loadConfig(ctx.directory);
-  console.log("[omo-omcs] Config loaded:", config3);
-  const backgroundManager = createBackgroundManager(ctx, config3.background_task);
+  const pluginConfig = loadConfig(ctx.directory);
+  console.log("[omo-omcs] Config loaded:", pluginConfig);
+  const backgroundManager = createBackgroundManager(ctx, pluginConfig.background_task);
   const backgroundTools = createBackgroundTools(backgroundManager, ctx.client);
   const callOmoAgent = createCallOmoAgent(ctx, backgroundManager);
+  const configHandler = createConfigHandler({
+    ctx,
+    pluginConfig
+  });
   return {
-    config: async () => {},
+    config: configHandler,
     event: async () => {},
     tool: {
       ...backgroundTools,
