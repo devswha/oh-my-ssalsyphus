@@ -26499,6 +26499,34 @@ Analyze systematically:
 Return thorough analysis with evidence and recommendations.`,
     description: "Deep analysis and investigation",
     agent: "Ssalsyphus"
+  },
+  "update-ssalsyphus": {
+    template: `Update oh-my-ssalsyphus plugin to the latest version.
+
+Run this command in your terminal:
+
+\`\`\`bash
+cd ~/.opencode && npm update oh-my-ssalsyphus && npm list oh-my-ssalsyphus --depth=0
+\`\`\`
+
+After the update completes:
+1. Check the version number in the output
+2. **Restart OpenCode** to load the new version (Ctrl+C and reopen)
+
+Current changelog: https://github.com/devswha/oh-my-ssalsyphus/commits/main`,
+    description: "Update oh-my-ssalsyphus plugin to latest version"
+  },
+  "cancel-ralph": {
+    template: `Cancel the currently active Ralph Loop.
+
+This will:
+- Stop the continuation enforcement
+- Clear the ralph-loop state
+- Allow you to work freely without completion guarantee
+
+The loop has been cancelled. You are now free.`,
+    description: "Cancel active Ralph Loop",
+    agent: "Ssalsyphus"
   }
 };
 function buildSsalsyphusAgent(_pluginConfig, availableAgents) {
