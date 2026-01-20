@@ -26589,6 +26589,1400 @@ function createConfigHandler(deps) {
   };
 }
 
+// src/hooks/continuation-messages.ts
+var TODO_CONTINUATION_MESSAGES = [
+  `[SYSTEM REMINDER - TODO CONTINUATION]
+
+Incomplete tasks remain in your todo list. Continue working on the next pending task.
+
+- Proceed without asking for permission
+- Mark each task complete when finished
+- Do not stop until all tasks are done`,
+  `[THE BOULDER NEVER STOPS]
+
+Like Sisyphus, you are bound to your task list. The boulder does not rest until it reaches the summit.
+
+There are still pending tasks. Pick up where you left off and continue.
+
+- Check your todo list for the next item
+- Work through each task systematically
+- Only rest when ALL tasks show "completed"`,
+  `[SISYPHUS REMINDER]
+
+Your work is not yet complete. The mountain awaits.
+
+Remaining tasks need your attention. Resume working now.
+
+- No need to ask for permission
+- Execute the next pending task
+- The loop continues until completion`,
+  `[CONTINUATION REQUIRED]
+
+Task list incomplete. Resume execution.
+
+You stopped before finishing. This is a reminder to continue.
+
+- Review your todo list
+- Start the next pending item
+- Keep working until done`,
+  `[TASK PERSISTENCE ACTIVE]
+
+Unfinished business detected. Re-engaging.
+
+Your todo list still has pending items. Time to get back to work.
+
+- Don't wait for instructions
+- Pick up the next task
+- Complete everything before stopping`
+];
+var RALPH_CONTINUATION_MESSAGES = [
+  `[RALPH LOOP CONTINUATION]
+
+You stopped without completing your promise. The work is NOT done yet.
+
+Continue working on incomplete items. Do not stop until you can truthfully output:
+\`<promise>TASK_COMPLETE</promise>\``,
+  `[RALPH LOOP - THE PROMISE BINDS YOU]
+
+The loop cannot be broken until you have earned your release.
+
+Your promise tag awaits. Keep working until you can honestly claim completion.
+
+Remember: The promise is not just a tag - it's a commitment to quality.`,
+  `[RALPH LOOP - PERSISTENCE REQUIRED]
+
+You have not yet earned your \`<promise>TASK_COMPLETE</promise>\`.
+
+Review the PRD. Check what remains. Continue executing.
+
+The loop will release you only when the work is truly done.`,
+  `[RALPH LOOP - CONTINUE OR VERIFY]
+
+Either:
+1. Continue working on remaining tasks, OR
+2. If you believe you're done, output the completion promise
+
+But be warned: false completion claims will be verified by Oracle.`,
+  `[RALPH LOOP - SISYPHEAN PERSISTENCE]
+
+The boulder rolls. The work continues. The loop persists.
+
+Check .sisyphus/prd.json for remaining stories.
+Log your progress in .sisyphus/progress.txt.
+Only the completion promise ends the loop.`
+];
+var ULTRAWORK_RALPH_MESSAGES = [
+  `[ULTRAWORK-RALPH - MAXIMUM INTENSITY CONTINUATION]
+
+PARALLEL EVERYTHING. DELEGATE AGGRESSIVELY. NEVER WAIT.
+
+You stopped, but the boulder still rolls. Resume at MAXIMUM INTENSITY.
+
+The combined modes demand:
+- Ultrawork's parallel execution
+- Ralph's completion guarantee
+
+Both conditions must be met. Continue NOW.`,
+  `[ULTRAWORK-RALPH - THE ULTIMATE MODE CONTINUES]
+
+This is not a drill. This is ULTRAWORK-RALPH.
+
+Resume work immediately. Fire off multiple agents. Background everything.
+
+The loop does not release you until Oracle-verified completion.`,
+  `[ULTRAWORK-RALPH - PERSISTENCE \xD7 INTENSITY]
+
+The most powerful mode will not be denied.
+
+CONTINUE:
+- Launch parallel tasks
+- Delegate to specialists
+- Never wait for results
+- Keep the pressure on
+
+The promise awaits your earned completion.`
+];
+function getContinuationMessage(context) {
+  const { completedCount, totalCount, nextTask, iteration, maxIterations, mode } = context;
+  let messages;
+  switch (mode) {
+    case "ultrawork-ralph":
+      messages = ULTRAWORK_RALPH_MESSAGES;
+      break;
+    case "ralph-loop":
+      messages = RALPH_CONTINUATION_MESSAGES;
+      break;
+    default:
+      messages = TODO_CONTINUATION_MESSAGES;
+  }
+  const index = iteration ? iteration % messages.length : Math.floor(Math.random() * messages.length);
+  let message = messages[index];
+  const statusLine = `
+
+[Status: ${completedCount}/${totalCount} completed, ${totalCount - completedCount} remaining]`;
+  message += statusLine;
+  if (nextTask) {
+    message += `
+[Next: ${nextTask}]`;
+  }
+  if (iteration !== undefined && maxIterations !== undefined) {
+    message += `
+[Iteration: ${iteration}/${maxIterations}]`;
+  }
+  return message;
+}
+
+// src/state/ralph-state.ts
+import * as fs from "fs";
+import * as path from "path";
+var STATE_FILENAME = "ralph-state.json";
+function getSisyphusDir(projectDir) {
+  return path.join(projectDir, ".sisyphus");
+}
+function getStatePath(projectDir) {
+  return path.join(getSisyphusDir(projectDir), STATE_FILENAME);
+}
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+function readRalphState(projectDir) {
+  const statePath = getStatePath(projectDir);
+  if (fs.existsSync(statePath)) {
+    try {
+      const content = fs.readFileSync(statePath, "utf-8");
+      const state = JSON.parse(content);
+      log(`Read ralph state from ${statePath}`, {
+        active: state.active,
+        iteration: state.iteration
+      });
+      return state;
+    } catch (err) {
+      log(`Failed to read ralph state`, { error: String(err) });
+    }
+  }
+  return null;
+}
+function writeRalphState(projectDir, state) {
+  const dir = getSisyphusDir(projectDir);
+  ensureDir(dir);
+  const statePath = getStatePath(projectDir);
+  try {
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+    log(`Wrote ralph state`, { iteration: state.iteration, active: state.active });
+  } catch (err) {
+    log(`Failed to write ralph state`, { error: String(err) });
+  }
+}
+function clearRalphState(projectDir) {
+  const statePath = getStatePath(projectDir);
+  if (fs.existsSync(statePath)) {
+    try {
+      fs.unlinkSync(statePath);
+      log(`Cleared ralph state`);
+    } catch (err) {
+      log(`Failed to clear ralph state`, { error: String(err) });
+    }
+  }
+}
+function createRalphState(sessionId, prompt, maxIterations = 50, prdMode = true) {
+  return {
+    active: true,
+    iteration: 0,
+    max_iterations: maxIterations,
+    completion_promise: "<promise>TASK_COMPLETE</promise>",
+    started_at: new Date().toISOString(),
+    prompt,
+    session_id: sessionId,
+    prd_mode: prdMode,
+    current_story_id: null,
+    last_activity_at: new Date().toISOString()
+  };
+}
+function updateRalphStateIteration(projectDir, state, currentStoryId) {
+  state.iteration++;
+  state.last_activity_at = new Date().toISOString();
+  if (currentStoryId !== undefined) {
+    state.current_story_id = currentStoryId;
+  }
+  writeRalphState(projectDir, state);
+}
+function markRalphStateComplete(projectDir, state) {
+  state.active = false;
+  state.last_activity_at = new Date().toISOString();
+  writeRalphState(projectDir, state);
+}
+
+// src/prd/prd-manager.ts
+import * as fs2 from "fs";
+import * as path2 from "path";
+var PRD_FILENAME = "prd.json";
+function getSisyphusDir2(projectDir) {
+  return path2.join(projectDir, ".sisyphus");
+}
+function getPrdPath(projectDir) {
+  return path2.join(getSisyphusDir2(projectDir), PRD_FILENAME);
+}
+function ensureDir2(dir) {
+  if (!fs2.existsSync(dir)) {
+    fs2.mkdirSync(dir, { recursive: true });
+  }
+}
+function readPrd(projectDir) {
+  const prdPath = getPrdPath(projectDir);
+  if (fs2.existsSync(prdPath)) {
+    try {
+      const content = fs2.readFileSync(prdPath, "utf-8");
+      const prd = JSON.parse(content);
+      log(`Read PRD`, {
+        project: prd.project,
+        stories: prd.userStories.length
+      });
+      return prd;
+    } catch (err) {
+      log(`Failed to read PRD`, { error: String(err) });
+    }
+  }
+  return null;
+}
+function writePrd(projectDir, prd) {
+  const dir = getSisyphusDir2(projectDir);
+  ensureDir2(dir);
+  const prdPath = getPrdPath(projectDir);
+  prd.updatedAt = new Date().toISOString();
+  if (!prd.createdAt) {
+    prd.createdAt = prd.updatedAt;
+  }
+  try {
+    fs2.writeFileSync(prdPath, JSON.stringify(prd, null, 2));
+    log(`Wrote PRD`, { project: prd.project, stories: prd.userStories.length });
+  } catch (err) {
+    log(`Failed to write PRD`, { error: String(err) });
+  }
+}
+function createPrdFromTask(task, projectName) {
+  return {
+    project: projectName ?? "Ralph Loop Task",
+    description: task,
+    userStories: [
+      {
+        id: "US-001",
+        title: "Complete the requested task",
+        description: task,
+        acceptanceCriteria: [
+          "Task is fully implemented",
+          "All tests pass (if applicable)",
+          "No errors or warnings",
+          "Code is production-ready"
+        ],
+        priority: 1,
+        passes: false
+      }
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+function getIncompleteStories(prd) {
+  return prd.userStories.filter((s) => !s.passes).sort((a, b) => a.priority - b.priority);
+}
+function getNextStory(prd) {
+  const incomplete = getIncompleteStories(prd);
+  return incomplete.length > 0 ? incomplete[0] : null;
+}
+function getPrdStatus(prd) {
+  const completed = prd.userStories.filter((s) => s.passes).length;
+  const total = prd.userStories.length;
+  return {
+    total,
+    completed,
+    remaining: total - completed,
+    percentComplete: total > 0 ? Math.round(completed / total * 100) : 0
+  };
+}
+function generateStoryContextPrompt(prd) {
+  const nextStory = getNextStory(prd);
+  if (!nextStory) {
+    return "All stories are complete! Verify everything works and output the completion promise.";
+  }
+  const status = getPrdStatus(prd);
+  return `## Current PRD Context
+
+**Project**: ${prd.project}
+**Progress**: ${status.completed}/${status.total} stories (${status.percentComplete}%)
+
+### Current Story: ${nextStory.id} - ${nextStory.title}
+
+${nextStory.description || ""}
+
+**Acceptance Criteria**:
+${nextStory.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join(`
+`)}
+
+---
+
+When this story is complete:
+1. Update .sisyphus/prd.json to set "passes": true for ${nextStory.id}
+2. Add any learnings to .sisyphus/progress.txt
+3. Move to the next story or output completion promise if all done`;
+}
+
+// src/prd/progress-tracker.ts
+import * as fs3 from "fs";
+import * as path3 from "path";
+var PROGRESS_FILENAME = "progress.txt";
+function getSisyphusDir3(projectDir) {
+  return path3.join(projectDir, ".sisyphus");
+}
+function getProgressPath(projectDir) {
+  return path3.join(getSisyphusDir3(projectDir), PROGRESS_FILENAME);
+}
+function ensureDir3(dir) {
+  if (!fs3.existsSync(dir)) {
+    fs3.mkdirSync(dir, { recursive: true });
+  }
+}
+function initializeProgress(projectDir, task) {
+  const dir = getSisyphusDir3(projectDir);
+  ensureDir3(dir);
+  const progressPath = getProgressPath(projectDir);
+  if (fs3.existsSync(progressPath)) {
+    log(`Progress file already exists, skipping initialization`);
+    return;
+  }
+  const content = `# Ralph Progress Log
+Started: ${new Date().toISOString()}
+Task: ${task}
+
+## Codebase Patterns
+(No patterns discovered yet)
+
+---
+
+## Iterations
+
+`;
+  fs3.writeFileSync(progressPath, content);
+  log(`Initialized progress file`);
+}
+function readProgress(projectDir) {
+  const progressPath = getProgressPath(projectDir);
+  if (fs3.existsSync(progressPath)) {
+    try {
+      return fs3.readFileSync(progressPath, "utf-8");
+    } catch (err) {
+      log(`Failed to read progress file`, { error: String(err) });
+    }
+  }
+  return null;
+}
+function getProgressSummary(projectDir) {
+  const content = readProgress(projectDir);
+  if (!content) {
+    return "No progress log found.";
+  }
+  const iterations = content.match(/## Iteration \d+/g) || [];
+  const patterns = content.match(/^- .+$/gm) || [];
+  const lastIterationMatch = content.match(/## Iteration (\d+) \([^)]+\)\nStory: ([^\n]+)/);
+  let summary = `Progress Summary:
+`;
+  summary += `- Total iterations: ${iterations.length}
+`;
+  summary += `- Patterns discovered: ${patterns.length}
+`;
+  if (lastIterationMatch) {
+    summary += `- Last iteration: ${lastIterationMatch[1]} (${lastIterationMatch[2]})
+`;
+  }
+  return summary;
+}
+function formatProgressContext(projectDir) {
+  const summary = getProgressSummary(projectDir);
+  const content = readProgress(projectDir);
+  if (!content) {
+    return "No progress history available.";
+  }
+  const patternsMatch = content.match(/## Codebase Patterns\n([\s\S]*?)(?=\n---|\n## Iterations)/);
+  const patterns = patternsMatch ? patternsMatch[1].trim() : "(None)";
+  return `## Progress Context
+
+${summary}
+
+### Discovered Patterns
+${patterns}
+
+---
+
+Remember to:
+1. Update progress.txt after completing each story
+2. Record any new patterns you discover
+3. Note files changed for future reference`;
+}
+
+// src/hooks/ralph-loop.ts
+import * as path4 from "path";
+var states = new Map;
+var COMPLETION_PROMISE = "<promise>TASK_COMPLETE</promise>";
+var LEGACY_COMPLETION_PROMISE = "<promise>DONE</promise>";
+var PRD_FILENAME2 = "prd.json";
+function createRalphLoopHook(ctx, options = {}) {
+  const maxIterations = options.config?.default_max_iterations ?? 50;
+  const isEnabled = options.config?.enabled !== false;
+  const getSisyphusDir4 = () => {
+    return path4.join(ctx.directory, ".sisyphus");
+  };
+  const getPrdPath2 = () => {
+    return path4.join(getSisyphusDir4(), PRD_FILENAME2);
+  };
+  const readPrd2 = () => {
+    return readPrd(ctx.directory);
+  };
+  const writePrd2 = (prd) => {
+    writePrd(ctx.directory, prd);
+  };
+  const restorePersistedState = () => {
+    const persistedState = readRalphState(ctx.directory);
+    if (persistedState && persistedState.active) {
+      log(`Restoring ralph loop from persisted state`, {
+        iteration: persistedState.iteration,
+        sessionId: persistedState.session_id
+      });
+      const state = {
+        sessionID: persistedState.session_id,
+        prompt: persistedState.prompt,
+        iteration: persistedState.iteration,
+        maxIterations: persistedState.max_iterations,
+        completionPromise: persistedState.completion_promise,
+        isActive: true,
+        startedAt: new Date(persistedState.started_at).getTime(),
+        mode: persistedState.prd_mode ? "ralph-loop" : "ralph-loop",
+        prdPath: getPrdPath2()
+      };
+      states.set(persistedState.session_id, state);
+    }
+  };
+  restorePersistedState();
+  const startLoop = (sessionID, prompt, opts) => {
+    if (!isEnabled) {
+      log(`Ralph loop disabled`, { sessionID });
+      return false;
+    }
+    if (states.has(sessionID)) {
+      log(`Ralph loop already active`, { sessionID });
+      return false;
+    }
+    const mode = opts?.mode ?? "ralph-loop";
+    let prd = readPrd2();
+    if (!prd) {
+      prd = createPrdFromTask(prompt);
+      writePrd2(prd);
+      log(`Created initial PRD`, { sessionID });
+    }
+    initializeProgress(ctx.directory, prompt);
+    const state = {
+      sessionID,
+      prompt,
+      iteration: 0,
+      maxIterations: opts?.maxIterations ?? maxIterations,
+      completionPromise: COMPLETION_PROMISE,
+      isActive: true,
+      startedAt: Date.now(),
+      mode,
+      prdPath: getPrdPath2()
+    };
+    states.set(sessionID, state);
+    const persistedState = createRalphState(sessionID, prompt, state.maxIterations, true);
+    writeRalphState(ctx.directory, persistedState);
+    options.onModeChange?.(sessionID, mode, prompt);
+    log(`Ralph loop started`, {
+      sessionID,
+      prompt: prompt.substring(0, 50),
+      maxIterations: state.maxIterations,
+      mode
+    });
+    ctx.client.tui.showToast({
+      body: {
+        title: mode === "ultrawork-ralph" ? "Ultrawork-Ralph Activated" : "Ralph Loop Started",
+        message: `Task: ${prompt.substring(0, 50)}...`,
+        variant: "success",
+        duration: 3000
+      }
+    }).catch(() => {});
+    return true;
+  };
+  const cancelLoop = (sessionID) => {
+    const state = states.get(sessionID);
+    if (!state) {
+      log(`No active ralph loop to cancel`, { sessionID });
+      return false;
+    }
+    states.delete(sessionID);
+    clearRalphState(ctx.directory);
+    options.onModeChange?.(sessionID, null);
+    log(`Ralph loop cancelled`, { sessionID, iteration: state.iteration });
+    ctx.client.tui.showToast({
+      body: {
+        title: "Ralph Loop Cancelled",
+        message: `Stopped after ${state.iteration} iterations`,
+        variant: "warning",
+        duration: 3000
+      }
+    }).catch(() => {});
+    return true;
+  };
+  const getState = (sessionID) => {
+    if (sessionID) {
+      return states.get(sessionID) ?? null;
+    }
+    for (const state of states.values()) {
+      if (state.isActive)
+        return state;
+    }
+    return null;
+  };
+  const checkCompletionInContent = (content) => {
+    return content.includes(COMPLETION_PROMISE) || content.includes(LEGACY_COMPLETION_PROMISE);
+  };
+  const event = async (input) => {
+    const { event: event2 } = input;
+    const props = event2.properties;
+    if (event2.type === "session.idle") {
+      const sessionID = props?.sessionID;
+      if (!sessionID)
+        return;
+      const state = states.get(sessionID);
+      if (!state || !state.isActive)
+        return;
+      state.iteration++;
+      const prd = readPrd2();
+      const nextStory = prd ? getNextStory(prd) : null;
+      updateRalphStateIteration(ctx.directory, {
+        active: true,
+        iteration: state.iteration,
+        max_iterations: state.maxIterations,
+        completion_promise: state.completionPromise,
+        started_at: new Date(state.startedAt).toISOString(),
+        prompt: state.prompt,
+        session_id: sessionID,
+        prd_mode: true,
+        current_story_id: nextStory?.id ?? null,
+        last_activity_at: new Date().toISOString()
+      }, nextStory?.id);
+      if (state.iteration >= state.maxIterations) {
+        log(`Ralph loop max iterations reached`, {
+          sessionID,
+          iteration: state.iteration
+        });
+        states.delete(sessionID);
+        clearRalphState(ctx.directory);
+        options.onModeChange?.(sessionID, null);
+        ctx.client.tui.showToast({
+          body: {
+            title: "Ralph Loop Safety Limit",
+            message: `Max iterations (${state.maxIterations}) reached`,
+            variant: "warning",
+            duration: 5000
+          }
+        }).catch(() => {});
+        return;
+      }
+      const prdStatus = prd ? getPrdStatus(prd) : null;
+      const progressContext = formatProgressContext(ctx.directory);
+      log(`Ralph loop continuing`, {
+        sessionID,
+        iteration: state.iteration,
+        maxIterations: state.maxIterations,
+        incompleteStories: prdStatus?.remaining ?? 0
+      });
+      const continuePrompt = getContinuationMessage({
+        completedCount: prdStatus?.completed ?? 0,
+        totalCount: prdStatus?.total ?? 1,
+        nextTask: nextStory ? `${nextStory.id} - ${nextStory.title}` : undefined,
+        iteration: state.iteration,
+        maxIterations: state.maxIterations,
+        mode: state.mode
+      });
+      const prdContext = prd ? generateStoryContextPrompt(prd) : "";
+      const fullPrompt = `${continuePrompt}
+
+Original task: ${state.prompt}
+
+${prdContext}
+
+${progressContext}
+
+**REMINDER**:
+- Check .sisyphus/prd.json for user stories
+- Update story "passes" to true when complete
+- Log learnings in .sisyphus/progress.txt
+- Only output the promise tag when ALL stories pass`;
+      try {
+        await ctx.client.session.prompt({
+          path: { id: sessionID },
+          body: {
+            parts: [{ type: "text", text: fullPrompt }]
+          },
+          query: { directory: ctx.directory }
+        });
+      } catch (err) {
+        log(`Ralph loop injection failed`, { sessionID, error: String(err) });
+      }
+    }
+    if (event2.type === "message.updated" || event2.type === "message.created") {
+      const info = props?.info;
+      const sessionID = info?.sessionID;
+      const role = info?.role;
+      if (!sessionID || role !== "assistant")
+        return;
+      const state = states.get(sessionID);
+      if (!state || !state.isActive)
+        return;
+      try {
+        const messagesResp = await ctx.client.session.messages({
+          path: { id: sessionID }
+        });
+        const messages = messagesResp.data ?? [];
+        const lastAssistant = [...messages].reverse().find((m) => m.info?.role === "assistant");
+        if (!lastAssistant?.parts)
+          return;
+        const content = lastAssistant.parts.filter((p) => p.type === "text" && p.text).map((p) => p.text).join(`
+`);
+        if (checkCompletionInContent(content)) {
+          log(`Ralph loop completion detected`, { sessionID });
+          states.delete(sessionID);
+          markRalphStateComplete(ctx.directory, {
+            active: false,
+            iteration: state.iteration,
+            max_iterations: state.maxIterations,
+            completion_promise: state.completionPromise,
+            started_at: new Date(state.startedAt).toISOString(),
+            prompt: state.prompt,
+            session_id: sessionID,
+            prd_mode: true,
+            current_story_id: null,
+            last_activity_at: new Date().toISOString()
+          });
+          options.onModeChange?.(sessionID, null);
+          const duration5 = Date.now() - state.startedAt;
+          const minutes = Math.floor(duration5 / 60000);
+          const seconds = Math.floor(duration5 % 60000 / 1000);
+          ctx.client.tui.showToast({
+            body: {
+              title: "Ralph Loop Completed!",
+              message: `Task finished in ${state.iteration} iterations (${minutes}m ${seconds}s)`,
+              variant: "success",
+              duration: 5000
+            }
+          }).catch(() => {});
+        }
+      } catch {}
+    }
+    if (event2.type === "session.deleted") {
+      const sessionInfo = props?.info;
+      if (sessionInfo?.id) {
+        states.delete(sessionInfo.id);
+      }
+    }
+  };
+  return {
+    startLoop,
+    cancelLoop,
+    getState,
+    event,
+    readPrd: readPrd2,
+    writePrd: writePrd2,
+    checkCompletionInContent
+  };
+}
+
+// src/state/ultrawork-state.ts
+import * as fs4 from "fs";
+import * as path5 from "path";
+var STATE_FILENAME2 = "ultrawork-state.json";
+var GLOBAL_STATE_DIR = path5.join(process.env.HOME || "", ".opencode");
+function getSisyphusDir4(projectDir) {
+  return path5.join(projectDir, ".sisyphus");
+}
+function getStatePath2(projectDir) {
+  return path5.join(getSisyphusDir4(projectDir), STATE_FILENAME2);
+}
+function getGlobalStatePath() {
+  return path5.join(GLOBAL_STATE_DIR, STATE_FILENAME2);
+}
+function ensureDir4(dir) {
+  if (!fs4.existsSync(dir)) {
+    fs4.mkdirSync(dir, { recursive: true });
+  }
+}
+function readUltraworkState(projectDir) {
+  const localPath = getStatePath2(projectDir);
+  const globalPath = getGlobalStatePath();
+  for (const statePath of [localPath, globalPath]) {
+    if (fs4.existsSync(statePath)) {
+      try {
+        const content = fs4.readFileSync(statePath, "utf-8");
+        const state = JSON.parse(content);
+        log(`Read ultrawork state from ${statePath}`, { active: state.active });
+        return state;
+      } catch (err) {
+        log(`Failed to read ultrawork state from ${statePath}`, { error: String(err) });
+      }
+    }
+  }
+  return null;
+}
+function writeUltraworkState(projectDir, state, writeGlobal = false) {
+  const localDir = getSisyphusDir4(projectDir);
+  ensureDir4(localDir);
+  const localPath = getStatePath2(projectDir);
+  try {
+    fs4.writeFileSync(localPath, JSON.stringify(state, null, 2));
+    log(`Wrote ultrawork state to ${localPath}`);
+  } catch (err) {
+    log(`Failed to write ultrawork state to ${localPath}`, { error: String(err) });
+  }
+  if (writeGlobal) {
+    ensureDir4(GLOBAL_STATE_DIR);
+    const globalPath = getGlobalStatePath();
+    try {
+      fs4.writeFileSync(globalPath, JSON.stringify(state, null, 2));
+      log(`Wrote ultrawork state to global ${globalPath}`);
+    } catch (err) {
+      log(`Failed to write global ultrawork state`, { error: String(err) });
+    }
+  }
+}
+function clearUltraworkState(projectDir, clearGlobal = false) {
+  const localPath = getStatePath2(projectDir);
+  const globalPath = getGlobalStatePath();
+  if (fs4.existsSync(localPath)) {
+    try {
+      fs4.unlinkSync(localPath);
+      log(`Cleared ultrawork state from ${localPath}`);
+    } catch (err) {
+      log(`Failed to clear ultrawork state`, { error: String(err) });
+    }
+  }
+  if (clearGlobal && fs4.existsSync(globalPath)) {
+    try {
+      fs4.unlinkSync(globalPath);
+      log(`Cleared global ultrawork state`);
+    } catch (err) {
+      log(`Failed to clear global ultrawork state`, { error: String(err) });
+    }
+  }
+}
+function updateUltraworkStateChecked(projectDir, state) {
+  state.last_checked_at = new Date().toISOString();
+  state.reinforcement_count++;
+  writeUltraworkState(projectDir, state);
+}
+
+// src/hooks/notepad.ts
+import * as fs5 from "fs";
+import * as path6 from "path";
+var NOTEPAD_FILENAME = "notepad.md";
+var DEFAULT_CONFIG = {
+  priorityMaxChars: 500,
+  workingMemoryDays: 7,
+  maxTotalSize: 8192
+};
+var PRIORITY_HEADER = "## Priority Context";
+var WORKING_MEMORY_HEADER = "## Working Memory";
+function getNotepadPath(directory) {
+  return path6.join(directory, ".sisyphus", NOTEPAD_FILENAME);
+}
+function readNotepad(directory) {
+  const notepadPath = getNotepadPath(directory);
+  if (!fs5.existsSync(notepadPath)) {
+    return null;
+  }
+  try {
+    return fs5.readFileSync(notepadPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+function extractSection(content, header) {
+  const regex = new RegExp(`${header}\\n([\\s\\S]*?)(?=\\n## [^#]|$)`);
+  const match = content.match(regex);
+  if (!match) {
+    return null;
+  }
+  let section = match[1];
+  section = section.replace(/<!--[\s\S]*?-->/g, "").trim();
+  return section || null;
+}
+function replaceSection(content, header, newContent) {
+  const regex = new RegExp(`(${header}\\n)([\\s\\S]*?)(?=## |$)`);
+  const commentMatch = content.match(new RegExp(`${header}\\n(<!--[\\s\\S]*?-->)`));
+  const comment = commentMatch ? commentMatch[1] + `
+` : "";
+  return content.replace(regex, `$1${comment}${newContent}
+
+`);
+}
+function getPriorityContext(directory) {
+  const content = readNotepad(directory);
+  if (!content) {
+    return null;
+  }
+  return extractSection(content, PRIORITY_HEADER);
+}
+function pruneOldEntries(directory, daysOld = DEFAULT_CONFIG.workingMemoryDays) {
+  const notepadPath = getNotepadPath(directory);
+  if (!fs5.existsSync(notepadPath)) {
+    return { pruned: 0, remaining: 0 };
+  }
+  let notepadContent = fs5.readFileSync(notepadPath, "utf-8");
+  const workingMemory = extractSection(notepadContent, WORKING_MEMORY_HEADER);
+  if (!workingMemory) {
+    return { pruned: 0, remaining: 0 };
+  }
+  const entryRegex = /### (\d{4}-\d{2}-\d{2} \d{2}:\d{2})\n([\s\S]*?)(?=### |$)/g;
+  const entries = [];
+  let match;
+  while ((match = entryRegex.exec(workingMemory)) !== null) {
+    entries.push({
+      timestamp: match[1],
+      content: match[2].trim()
+    });
+  }
+  const cutoff = new Date;
+  cutoff.setDate(cutoff.getDate() - daysOld);
+  const kept = entries.filter((entry) => {
+    const entryDate = new Date(entry.timestamp);
+    return entryDate >= cutoff;
+  });
+  const pruned = entries.length - kept.length;
+  if (pruned === 0) {
+    return { pruned: 0, remaining: entries.length };
+  }
+  const newContent = kept.map((entry) => `### ${entry.timestamp}
+${entry.content}`).join(`
+
+`);
+  notepadContent = replaceSection(notepadContent, WORKING_MEMORY_HEADER, newContent);
+  try {
+    fs5.writeFileSync(notepadPath, notepadContent);
+    log(`Pruned ${pruned} old Working Memory entries`);
+    return { pruned, remaining: kept.length };
+  } catch {
+    return { pruned: 0, remaining: entries.length };
+  }
+}
+function formatNotepadContext(directory) {
+  const notepadPath = getNotepadPath(directory);
+  if (!fs5.existsSync(notepadPath)) {
+    return null;
+  }
+  const priorityContext = getPriorityContext(directory);
+  if (!priorityContext) {
+    return null;
+  }
+  return `<notepad-priority>
+
+## Priority Context
+
+${priorityContext}
+
+</notepad-priority>
+`;
+}
+
+// src/hooks/persistent-mode.ts
+var DEFAULT_MAX_TODO_CONTINUATION_ATTEMPTS = 5;
+var todoContinuationAttempts = new Map;
+function trackTodoContinuationAttempt(sessionId) {
+  const current = todoContinuationAttempts.get(sessionId) || 0;
+  const next = current + 1;
+  todoContinuationAttempts.set(sessionId, next);
+  return next;
+}
+function resetTodoContinuationAttempts(sessionId) {
+  todoContinuationAttempts.delete(sessionId);
+}
+function checkRalphLoop(projectDir, sessionId) {
+  const state = readRalphState(projectDir);
+  if (!state || !state.active) {
+    return null;
+  }
+  if (state.session_id && sessionId && state.session_id !== sessionId) {
+    return null;
+  }
+  if (state.iteration >= state.max_iterations) {
+    clearRalphState(projectDir);
+    log(`Ralph loop max iterations reached`, {
+      iteration: state.iteration,
+      maxIterations: state.max_iterations
+    });
+    return {
+      shouldContinue: false,
+      message: `[RALPH LOOP STOPPED] Max iterations (${state.max_iterations}) reached without completion promise.`,
+      mode: "none"
+    };
+  }
+  const continuationMessage = getContinuationMessage({
+    completedCount: 0,
+    totalCount: 1,
+    iteration: state.iteration,
+    maxIterations: state.max_iterations,
+    mode: state.prd_mode ? "ralph-loop" : "ralph-loop"
+  });
+  return {
+    shouldContinue: true,
+    message: `<ralph-loop-continuation>
+
+[RALPH LOOP - ITERATION ${state.iteration}/${state.max_iterations}]
+
+${continuationMessage}
+
+Original task: ${state.prompt}
+
+**REMINDER**:
+- Check .sisyphus/prd.json for user stories
+- Update story "passes" to true when complete
+- Only output <promise>TASK_COMPLETE</promise> when ALL stories pass
+
+</ralph-loop-continuation>
+
+---
+
+`,
+    mode: "ralph-loop",
+    metadata: {
+      iteration: state.iteration,
+      maxIterations: state.max_iterations
+    }
+  };
+}
+function checkUltrawork(projectDir, sessionId, hasIncompleteTodos) {
+  const state = readUltraworkState(projectDir);
+  if (!state || !state.active) {
+    return null;
+  }
+  if (state.session_id && sessionId && state.session_id !== sessionId) {
+    return null;
+  }
+  if (!hasIncompleteTodos) {
+    clearUltraworkState(projectDir, true);
+    log(`Ultrawork completed - all tasks done`);
+    return {
+      shouldContinue: false,
+      message: `[ULTRAWORK COMPLETE] All tasks finished. Ultrawork mode deactivated. Well done!`,
+      mode: "none"
+    };
+  }
+  updateUltraworkStateChecked(projectDir, state);
+  return {
+    shouldContinue: true,
+    message: `<ultrawork-persistence>
+
+[ULTRAWORK MODE STILL ACTIVE - Reinforcement #${state.reinforcement_count + 1}]
+
+Your ultrawork session is NOT complete. Incomplete todos remain.
+
+REMEMBER THE ULTRAWORK RULES:
+- **PARALLEL**: Fire independent calls simultaneously - NEVER wait sequentially
+- **BACKGROUND FIRST**: Use Task(run_in_background=true) for exploration (10+ concurrent)
+- **TODO**: Track EVERY step. Mark complete IMMEDIATELY after each
+- **VERIFY**: Check ALL requirements met before done
+- **NO Premature Stopping**: ALL TODOs must be complete
+
+Continue working on the next pending task. DO NOT STOP until all tasks are marked complete.
+
+Original task: ${state.original_prompt}
+
+</ultrawork-persistence>
+
+---
+
+`,
+    mode: "ultrawork",
+    metadata: {
+      reinforcementCount: state.reinforcement_count
+    }
+  };
+}
+function checkTodoContinuation(sessionId, todoCount, totalCount, nextTask, options) {
+  if (todoCount === 0) {
+    resetTodoContinuationAttempts(sessionId);
+    return null;
+  }
+  const maxAttempts = options?.maxTodoContinuationAttempts ?? DEFAULT_MAX_TODO_CONTINUATION_ATTEMPTS;
+  const attemptCount = trackTodoContinuationAttempt(sessionId);
+  if (attemptCount > maxAttempts) {
+    log(`Todo continuation limit reached`, { attempts: attemptCount, maxAttempts });
+    return {
+      shouldContinue: false,
+      message: `[TODO CONTINUATION LIMIT] Attempted ${maxAttempts} continuations without progress. ${todoCount} tasks remain incomplete. Consider reviewing the stuck tasks or asking the user for guidance.`,
+      mode: "none",
+      metadata: {
+        todoCount,
+        todoContinuationAttempts: attemptCount
+      }
+    };
+  }
+  const continuationMessage = getContinuationMessage({
+    completedCount: totalCount - todoCount,
+    totalCount,
+    nextTask,
+    mode: "todo"
+  });
+  const attemptInfo = attemptCount > 1 ? `
+[Continuation attempt ${attemptCount}/${maxAttempts}]` : "";
+  return {
+    shouldContinue: true,
+    message: `<todo-continuation>
+
+${continuationMessage}
+
+[Status: ${todoCount} of ${totalCount} tasks remaining]${attemptInfo}
+
+</todo-continuation>
+
+---
+
+`,
+    mode: "todo-continuation",
+    metadata: {
+      todoCount,
+      todoContinuationAttempts: attemptCount
+    }
+  };
+}
+async function checkPersistentModes(ctx, sessionId, options) {
+  const projectDir = ctx.directory;
+  if (options?.pruneOnStart) {
+    pruneOldEntries(projectDir);
+  }
+  let todos = [];
+  try {
+    const response = await ctx.client.session.todo({ path: { id: sessionId } });
+    todos = response.data ?? response;
+  } catch {}
+  const todoCount = todos.filter((t) => t.status !== "completed" && t.status !== "cancelled").length;
+  const totalCount = todos.length;
+  const nextTask = todos.find((t) => t.status === "pending" || t.status === "in_progress")?.content;
+  const hasIncompleteTodos = todoCount > 0;
+  const ralphResult = checkRalphLoop(projectDir, sessionId);
+  if (ralphResult?.shouldContinue) {
+    if (options?.injectNotepadContext) {
+      const notepadContext = formatNotepadContext(projectDir);
+      if (notepadContext) {
+        ralphResult.message = notepadContext + `
+` + ralphResult.message;
+      }
+    }
+    return ralphResult;
+  }
+  const ultraworkResult = checkUltrawork(projectDir, sessionId, hasIncompleteTodos);
+  if (ultraworkResult?.shouldContinue) {
+    if (options?.injectNotepadContext) {
+      const notepadContext = formatNotepadContext(projectDir);
+      if (notepadContext) {
+        ultraworkResult.message = notepadContext + `
+` + ultraworkResult.message;
+      }
+    }
+    return ultraworkResult;
+  }
+  if (hasIncompleteTodos) {
+    const todoContResult = checkTodoContinuation(sessionId, todoCount, totalCount, nextTask, options);
+    if (todoContResult?.shouldContinue) {
+      if (options?.injectNotepadContext) {
+        const notepadContext = formatNotepadContext(projectDir);
+        if (notepadContext) {
+          todoContResult.message = notepadContext + `
+` + todoContResult.message;
+        }
+      }
+      return todoContResult;
+    }
+    if (todoContResult) {
+      return todoContResult;
+    }
+  }
+  return {
+    shouldContinue: false,
+    message: "",
+    mode: "none"
+  };
+}
+function createPersistentModeHook(ctx, options) {
+  return {
+    checkOnIdle: async (sessionId) => {
+      return checkPersistentModes(ctx, sessionId, options);
+    },
+    resetAttempts: (sessionId) => {
+      resetTodoContinuationAttempts(sessionId);
+    }
+  };
+}
+
+// src/prompts/ultrawork.ts
+var ULTRAWORK_SYSTEM_PROMPT = `[ULTRAWORK MODE ACTIVATED - MAXIMUM INTENSITY]
+
+## THE ULTRAWORK OATH
+
+You are now operating at **MAXIMUM INTENSITY**. Half-measures are unacceptable. Incomplete work is FAILURE. You will persist until EVERY task is VERIFIED complete.
+
+This mode OVERRIDES default heuristics. Where default mode says "parallelize when profitable," ultrawork says "PARALLEL EVERYTHING."
+
+## ULTRAWORK OVERRIDES
+
+| Default Behavior | Ultrawork Override |
+|------------------|-------------------|
+| Parallelize when profitable | **PARALLEL EVERYTHING** |
+| Do simple tasks directly | **DELEGATE EVEN SMALL TASKS** |
+| Wait for verification | **DON'T WAIT - continue immediately** |
+| Background for long ops | **BACKGROUND EVERYTHING POSSIBLE** |
+
+## EXECUTION PROTOCOL
+
+### 1. PARALLEL EVERYTHING
+- Fire off MULTIPLE agents simultaneously - don't analyze, just launch
+- Don't wait when you can parallelize
+- Use background execution for ALL operations that support it
+- Maximum throughput is the only goal
+- Launch 3-5 agents in parallel when possible
+
+### 2. DELEGATE AGGRESSIVELY
+Route tasks to specialists IMMEDIATELY - don't do it yourself:
+- \`oracle\` \u2192 ANY debugging or analysis
+- \`librarian\` \u2192 ANY research or doc lookup
+- \`explore\` \u2192 ANY search operation
+- \`frontend-engineer\` \u2192 ANY UI work
+- \`document-writer\` \u2192 ANY documentation
+- \`sisyphus-junior\` \u2192 ANY code changes
+
+### 3. NEVER WAIT
+- Start the next task BEFORE the previous one completes
+- Check background task results LATER
+- Don't block on verification - launch it and continue
+- Maximum concurrency at all times
+
+### 4. PERSISTENCE ENFORCEMENT
+- Create TODO list IMMEDIATELY
+- Mark tasks in_progress BEFORE starting
+- Mark completed ONLY after VERIFICATION
+- LOOP until 100% complete
+- Re-check todo list before ANY conclusion attempt
+
+## THE ULTRAWORK PROMISE
+
+Before stopping, VERIFY:
+- [ ] Todo list: ZERO pending/in_progress tasks
+- [ ] All functionality: TESTED and WORKING
+- [ ] All errors: RESOLVED
+- [ ] User's request: FULLY SATISFIED
+
+**If ANY checkbox is unchecked, CONTINUE WORKING. No exceptions.**
+
+## SMART MODEL ROUTING (SAVE TOKENS)
+
+**Choose tier based on task complexity: LOW (haiku) \u2192 MEDIUM (sonnet) \u2192 HIGH (opus)**
+
+| Domain | LOW (Haiku) | MEDIUM (Sonnet) | HIGH (Opus) |
+|--------|-------------|-----------------|-------------|
+| **Analysis** | oracle-low | oracle-medium | oracle |
+| **Execution** | sisyphus-junior-low | sisyphus-junior | sisyphus-junior-high |
+| **Search** | explore | explore-medium | - |
+| **Research** | librarian-low | librarian | - |
+| **Frontend** | frontend-engineer-low | frontend-engineer | frontend-engineer-high |
+| **Docs** | document-writer | - | - |
+| **Planning** | - | - | prometheus, momus, metis |
+
+## THE BOULDER NEVER STOPS
+
+The boulder does not stop until it reaches the summit. In ultrawork mode, it rolls FASTER.`;
+var RALPH_LOOP_SYSTEM_PROMPT = `[RALPH LOOP ACTIVATED - INFINITE PERSISTENCE MODE]
+
+## THE RALPH OATH
+
+You have entered the Ralph Loop - an INESCAPABLE development cycle that binds you to your task until VERIFIED completion. There is no early exit. There is no giving up. The only way out is through.
+
+## PRD-BASED WORKFLOW
+
+If \`.sisyphus/prd.json\` exists:
+1. Read the PRD file to understand all user stories
+2. Read \`.sisyphus/progress.txt\` for learnings
+3. Work on highest priority story where \`passes: false\`
+4. Mark \`passes: true\` when story is complete
+5. Update progress.txt with learnings
+6. Repeat until ALL stories pass
+
+If no PRD exists, create one:
+\`\`\`json
+{
+  "project": "[Feature Name]",
+  "description": "[Task description]",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "[Short title]",
+      "acceptanceCriteria": ["Criterion 1", "Typecheck passes"],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}
+\`\`\`
+
+## The Promise Mechanism
+
+The \`<promise>TASK_COMPLETE</promise>\` tag is a SACRED CONTRACT. You may ONLY output it when:
+
+\u2713 ALL stories in prd.json have \`passes: true\`
+\u2713 ALL acceptance criteria for each story are met
+\u2713 Quality checks pass (typecheck, tests)
+\u2713 progress.txt updated with learnings
+
+## EXIT CONDITIONS
+
+| Condition | What Happens |
+|-----------|--------------|
+| \`<promise>TASK_COMPLETE</promise>\` | Loop ends - work verified complete |
+| All PRD stories pass | Loop can end |
+| User runs \`/cancel-ralph\` | Loop cancelled by user |
+| Max iterations reached | Safety limit |
+| Stop without promise | **CONTINUATION FORCED** |
+
+## VERIFICATION PROTOCOL
+
+Before outputting promise:
+1. Self-check: All PRD stories pass?
+2. Run tests: Do they pass?
+3. Review changes: Production-ready?
+
+**NO PROMISE WITHOUT VERIFICATION.**`;
+var ULTRAWORK_RALPH_SYSTEM_PROMPT = `[ULTRAWORK-RALPH ACTIVATED - MAXIMUM INTENSITY + COMPLETION GUARANTEE]
+
+## THE ULTIMATE MODE
+
+You are now in **ULTRAWORK-RALPH** mode - the most powerful execution mode available. This combines:
+- **ULTRAWORK**: Maximum intensity, parallel everything, aggressive delegation
+- **RALPH LOOP**: Inescapable completion guarantee with verification
+
+There is no half-measures. There is no early exit. You work at MAXIMUM INTENSITY until VERIFIED completion.
+
+## ULTRAWORK OVERRIDES (ACTIVE)
+
+| Default Behavior | Ultrawork Override |
+|------------------|-------------------|
+| Parallelize when profitable | **PARALLEL EVERYTHING** |
+| Do simple tasks directly | **DELEGATE EVEN SMALL TASKS** |
+| Wait for verification | **DON'T WAIT - continue immediately** |
+| Background for long ops | **BACKGROUND EVERYTHING POSSIBLE** |
+
+## RALPH LOOP ENFORCEMENT (ACTIVE)
+
+The \`<promise>TASK_COMPLETE</promise>\` tag binds you to completion. You may ONLY output it when:
+
+- [ ] ALL todo items are marked 'completed'
+- [ ] ALL requested functionality is implemented AND TESTED
+- [ ] ALL errors have been resolved
+- [ ] You have TESTED (not assumed) the changes work
+
+**If you stop without the promise, YOU WILL BE FORCED TO CONTINUE.**
+
+## EXECUTION PROTOCOL
+
+### 1. PARALLEL EVERYTHING
+- Fire off MULTIPLE agents simultaneously
+- Use background execution for ALL operations
+- Launch 3-5 agents in parallel when possible
+- Maximum throughput is the only goal
+
+### 2. DELEGATE AGGRESSIVELY
+Route tasks to specialists IMMEDIATELY:
+- \`oracle\` / \`oracle-medium\` \u2192 debugging, analysis, verification
+- \`librarian\` \u2192 research, doc lookup
+- \`explore\` \u2192 codebase search
+- \`frontend-engineer\` \u2192 UI work
+- \`sisyphus-junior\` / \`sisyphus-junior-high\` \u2192 code changes
+
+### 3. NEVER WAIT
+- Start the next task BEFORE the previous one completes
+- Check background task results LATER
+- Maximum concurrency at all times
+
+### 4. TODO OBSESSION
+- Create TODO list IMMEDIATELY with atomic steps
+- Mark in_progress BEFORE starting (one at a time)
+- Mark completed IMMEDIATELY after each step
+- NEVER batch completions
+
+## EXIT CONDITIONS
+
+| Condition | What Happens |
+|-----------|--------------|
+| \`<promise>TASK_COMPLETE</promise>\` | Both modes end - work verified complete |
+| User runs \`/cancel-ralph\` | Both modes cancelled |
+| Max iterations reached | Safety limit |
+| Stop without promise | **CONTINUATION FORCED** |
+
+## THE BOULDER NEVER STOPS
+
+The boulder rolls at MAXIMUM SPEED until it reaches the summit. No shortcuts. No giving up. Only verified completion releases you.
+
+Begin working NOW. PARALLEL EVERYTHING. The loop will not release you until you earn your \`<promise>TASK_COMPLETE</promise>\`.`;
+
+// src/hooks/system-prompt-injector.ts
+var sessionModes = new Map;
+function createSystemPromptInjector(_ctx) {
+  const setMode = (sessionID, mode, task) => {
+    if (mode === null) {
+      sessionModes.delete(sessionID);
+      log(`Mode cleared`, { sessionID });
+    } else {
+      sessionModes.set(sessionID, {
+        mode,
+        sessionID,
+        startedAt: Date.now(),
+        task
+      });
+      log(`Mode set`, { sessionID, mode, task: task?.substring(0, 50) });
+    }
+  };
+  const getMode = (sessionID) => {
+    return sessionModes.get(sessionID);
+  };
+  const clearMode = (sessionID) => {
+    sessionModes.delete(sessionID);
+  };
+  const getSystemPromptForMode = (mode) => {
+    switch (mode) {
+      case "ultrawork":
+        return ULTRAWORK_SYSTEM_PROMPT;
+      case "ralph-loop":
+        return RALPH_LOOP_SYSTEM_PROMPT;
+      case "ultrawork-ralph":
+        return ULTRAWORK_RALPH_SYSTEM_PROMPT;
+      default:
+        return null;
+    }
+  };
+  const systemTransformHook = async (input, output) => {
+    const state = sessionModes.get(input.sessionID);
+    if (!state?.mode)
+      return;
+    const systemPrompt = getSystemPromptForMode(state.mode);
+    if (systemPrompt) {
+      output.system.push(systemPrompt);
+      log(`Injected system prompt`, { sessionID: input.sessionID, mode: state.mode });
+    }
+  };
+  return {
+    setMode,
+    getMode,
+    clearMode,
+    getSystemPromptForMode,
+    "experimental.chat.system.transform": systemTransformHook
+  };
+}
+
 // src/index.ts
 var OmoOmcsPlugin = async (ctx) => {
   const pluginConfig = loadConfig(ctx.directory);
@@ -26596,13 +27990,69 @@ var OmoOmcsPlugin = async (ctx) => {
   const backgroundManager = createBackgroundManager(ctx, pluginConfig.background_task);
   const backgroundTools = createBackgroundTools(backgroundManager, ctx.client);
   const callOmoAgent = createCallOmoAgent(ctx, backgroundManager);
+  const systemPromptInjector = createSystemPromptInjector(ctx);
+  const ralphLoop = createRalphLoopHook(ctx, {
+    config: pluginConfig.ralph_loop,
+    onModeChange: (sessionID, mode, task) => {
+      if (mode) {
+        systemPromptInjector.setMode(sessionID, mode, task);
+      } else {
+        systemPromptInjector.clearMode(sessionID);
+      }
+    }
+  });
+  createPersistentModeHook(ctx, {
+    injectNotepadContext: true
+  });
   const configHandler = createConfigHandler({
     ctx,
     pluginConfig
   });
   return {
     config: configHandler,
-    event: async () => {},
+    event: async (input) => {
+      const { event } = input;
+      const props = event.properties;
+      await ralphLoop.event(input);
+      if (event.type === "session.idle") {
+        const sessionID = props?.sessionID;
+        if (sessionID) {
+          const result = await checkPersistentModes(ctx, sessionID, {
+            injectNotepadContext: true
+          });
+          if (result.shouldContinue && result.message) {
+            log(`Persistent mode continuation`, { mode: result.mode, sessionID });
+          }
+        }
+      }
+    },
+    "chat.message": async (input, output) => {
+      const promptText = output.parts?.filter((p) => p.type === "text" && p.text).map((p) => p.text).join(`
+`).trim() || "";
+      const isRalphLoopTemplate = promptText.includes("RALPH LOOP ACTIVATED") || promptText.includes("ULTRAWORK-RALPH ACTIVATED");
+      const isCancelRalphTemplate = promptText.includes("Cancel the currently active Ralph Loop");
+      if (isRalphLoopTemplate) {
+        const taskMatch = promptText.match(/<user-task>\s*([\s\S]*?)\s*<\/user-task>/i);
+        const rawTask = taskMatch?.[1]?.trim() || "";
+        const prompt = rawTask || "Complete the task as instructed";
+        const isUltraworkRalph = promptText.includes("ULTRAWORK-RALPH");
+        log("[ralph-loop] Starting loop from chat.message", {
+          sessionID: input.sessionID,
+          prompt: prompt.substring(0, 50),
+          mode: isUltraworkRalph ? "ultrawork-ralph" : "ralph-loop"
+        });
+        ralphLoop.startLoop(input.sessionID, prompt, {
+          mode: isUltraworkRalph ? "ultrawork-ralph" : "ralph-loop"
+        });
+      }
+      if (isCancelRalphTemplate) {
+        log("[ralph-loop] Cancelling loop from chat.message", {
+          sessionID: input.sessionID
+        });
+        ralphLoop.cancelLoop(input.sessionID);
+      }
+    },
+    "experimental.chat.system.transform": systemPromptInjector["experimental.chat.system.transform"],
     tool: {
       ...backgroundTools,
       call_omo_agent: callOmoAgent

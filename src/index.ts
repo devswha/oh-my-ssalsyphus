@@ -4,6 +4,10 @@ import { createBackgroundManager } from "./tools/background-manager";
 import { createBackgroundTools } from "./tools/background-tools";
 import { createCallOmoAgent } from "./tools/call-omo-agent";
 import { createConfigHandler } from "./plugin-handlers/config-handler";
+import { createRalphLoopHook } from "./hooks/ralph-loop";
+import { createPersistentModeHook, checkPersistentModes } from "./hooks/persistent-mode";
+import { createSystemPromptInjector, type ActiveMode } from "./hooks/system-prompt-injector";
+import { log } from "./shared/logger";
 
 const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
   const pluginConfig = loadConfig(ctx.directory);
@@ -13,6 +17,26 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
   const backgroundTools = createBackgroundTools(backgroundManager, ctx.client);
   const callOmoAgent = createCallOmoAgent(ctx, backgroundManager);
 
+  // Create system prompt injector for mode tracking
+  const systemPromptInjector = createSystemPromptInjector(ctx);
+
+  // Create ralph loop hook with mode change callback
+  const ralphLoop = createRalphLoopHook(ctx, {
+    config: pluginConfig.ralph_loop,
+    onModeChange: (sessionID: string, mode: ActiveMode | null, task?: string) => {
+      if (mode) {
+        systemPromptInjector.setMode(sessionID, mode, task);
+      } else {
+        systemPromptInjector.clearMode(sessionID);
+      }
+    },
+  });
+
+  // Initialize persistent mode hook (checkPersistentModes is used directly in event handler)
+  createPersistentModeHook(ctx, {
+    injectNotepadContext: true,
+  });
+
   // Create config handler for agent/command registration
   const configHandler = createConfigHandler({
     ctx,
@@ -21,7 +45,68 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
 
   return {
     config: configHandler,
-    event: async () => {},
+    event: async (input: { event: { type: string; properties?: unknown } }) => {
+      const { event } = input;
+      const props = event.properties as Record<string, unknown> | undefined;
+
+      // Handle ralph loop events
+      await ralphLoop.event(input);
+
+      // Handle session.idle for persistent mode continuation
+      if (event.type === "session.idle") {
+        const sessionID = props?.sessionID as string | undefined;
+        if (sessionID) {
+          const result = await checkPersistentModes(ctx, sessionID, {
+            injectNotepadContext: true,
+          });
+
+          if (result.shouldContinue && result.message) {
+            log(`Persistent mode continuation`, { mode: result.mode, sessionID });
+            // The continuation is handled by ralph-loop or persistent-mode hook
+          }
+        }
+      }
+    },
+    "chat.message": async (
+      input: { sessionID: string; agent?: string },
+      output: { message: unknown; parts: Array<{ type: string; text?: string }> }
+    ) => {
+      // Detect ralph-loop/ultrawork-ralph activation from slash command
+      const promptText = output.parts
+        ?.filter((p) => p.type === "text" && p.text)
+        .map((p) => p.text)
+        .join("\n")
+        .trim() || "";
+
+      const isRalphLoopTemplate = promptText.includes("RALPH LOOP ACTIVATED") ||
+        promptText.includes("ULTRAWORK-RALPH ACTIVATED");
+      const isCancelRalphTemplate = promptText.includes("Cancel the currently active Ralph Loop");
+
+      if (isRalphLoopTemplate) {
+        const taskMatch = promptText.match(/<user-task>\s*([\s\S]*?)\s*<\/user-task>/i);
+        const rawTask = taskMatch?.[1]?.trim() || "";
+        const prompt = rawTask || "Complete the task as instructed";
+        const isUltraworkRalph = promptText.includes("ULTRAWORK-RALPH");
+
+        log("[ralph-loop] Starting loop from chat.message", {
+          sessionID: input.sessionID,
+          prompt: prompt.substring(0, 50),
+          mode: isUltraworkRalph ? "ultrawork-ralph" : "ralph-loop",
+        });
+
+        ralphLoop.startLoop(input.sessionID, prompt, {
+          mode: isUltraworkRalph ? "ultrawork-ralph" : "ralph-loop",
+        });
+      }
+
+      if (isCancelRalphTemplate) {
+        log("[ralph-loop] Cancelling loop from chat.message", {
+          sessionID: input.sessionID,
+        });
+        ralphLoop.cancelLoop(input.sessionID);
+      }
+    },
+    "experimental.chat.system.transform": systemPromptInjector["experimental.chat.system.transform"],
     tool: {
       ...backgroundTools,
       call_omo_agent: callOmoAgent,
