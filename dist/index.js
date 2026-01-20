@@ -26801,7 +26801,6 @@ function createRalphState(sessionId, prompt, maxIterations = 50, prdMode = true)
   };
 }
 function updateRalphStateIteration(projectDir, state, currentStoryId) {
-  state.iteration++;
   state.last_activity_at = new Date().toISOString();
   if (currentStoryId !== undefined) {
     state.current_story_id = currentStoryId;
@@ -27281,7 +27280,12 @@ ${progressContext}
     if (event2.type === "session.deleted") {
       const sessionInfo = props?.info;
       if (sessionInfo?.id) {
+        const hadState = states.has(sessionInfo.id);
         states.delete(sessionInfo.id);
+        if (hadState) {
+          options.onModeChange?.(sessionInfo.id, null);
+          log(`Ralph loop cleared on session delete`, { sessionID: sessionInfo.id });
+        }
       }
     }
   };
@@ -27390,8 +27394,52 @@ var DEFAULT_CONFIG = {
 };
 var PRIORITY_HEADER = "## Priority Context";
 var WORKING_MEMORY_HEADER = "## Working Memory";
+var MANUAL_HEADER = "## MANUAL";
 function getNotepadPath(directory) {
   return path6.join(directory, ".sisyphus", NOTEPAD_FILENAME);
+}
+function ensureSisyphusDir(directory) {
+  const sisyphusDir = path6.join(directory, ".sisyphus");
+  if (!fs5.existsSync(sisyphusDir)) {
+    try {
+      fs5.mkdirSync(sisyphusDir, { recursive: true });
+      return true;
+    } catch (err) {
+      log(`Failed to create .sisyphus directory`, { error: String(err) });
+      return false;
+    }
+  }
+  return true;
+}
+function initNotepad(directory) {
+  if (!ensureSisyphusDir(directory)) {
+    return false;
+  }
+  const notepadPath = getNotepadPath(directory);
+  if (fs5.existsSync(notepadPath)) {
+    return true;
+  }
+  const content = `# Notepad
+<!-- Auto-managed by Sisyphus. Manual edits preserved in MANUAL section. -->
+
+${PRIORITY_HEADER}
+<!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
+
+${WORKING_MEMORY_HEADER}
+<!-- Session notes. Auto-pruned after 7 days. -->
+
+${MANUAL_HEADER}
+<!-- User content. Never auto-pruned. -->
+
+`;
+  try {
+    fs5.writeFileSync(notepadPath, content);
+    log(`Initialized notepad.md`);
+    return true;
+  } catch (err) {
+    log(`Failed to initialize notepad.md`, { error: String(err) });
+    return false;
+  }
 }
 function readNotepad(directory) {
   const notepadPath = getNotepadPath(directory);
@@ -27429,6 +27477,49 @@ function getPriorityContext(directory) {
     return null;
   }
   return extractSection(content, PRIORITY_HEADER);
+}
+function setPriorityContext(directory, content, config3 = DEFAULT_CONFIG) {
+  if (!fs5.existsSync(getNotepadPath(directory))) {
+    if (!initNotepad(directory)) {
+      return { success: false };
+    }
+  }
+  const notepadPath = getNotepadPath(directory);
+  let notepadContent = fs5.readFileSync(notepadPath, "utf-8");
+  const warning = content.length > config3.priorityMaxChars ? `Priority Context exceeds ${config3.priorityMaxChars} chars (${content.length} chars). Consider condensing.` : undefined;
+  notepadContent = replaceSection(notepadContent, PRIORITY_HEADER, content);
+  try {
+    fs5.writeFileSync(notepadPath, notepadContent);
+    log(`Updated Priority Context`, { length: content.length });
+    return { success: true, warning };
+  } catch {
+    return { success: false };
+  }
+}
+function addWorkingMemoryEntry(directory, content) {
+  if (!fs5.existsSync(getNotepadPath(directory))) {
+    if (!initNotepad(directory)) {
+      return false;
+    }
+  }
+  const notepadPath = getNotepadPath(directory);
+  let notepadContent = fs5.readFileSync(notepadPath, "utf-8");
+  const currentMemory = extractSection(notepadContent, WORKING_MEMORY_HEADER) || "";
+  const now = new Date;
+  const timestamp = now.toISOString().slice(0, 16).replace("T", " ");
+  const newEntry = `### ${timestamp}
+${content}
+`;
+  const updatedMemory = currentMemory ? currentMemory + `
+` + newEntry : newEntry;
+  notepadContent = replaceSection(notepadContent, WORKING_MEMORY_HEADER, updatedMemory);
+  try {
+    fs5.writeFileSync(notepadPath, notepadContent);
+    log(`Added Working Memory entry`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 function pruneOldEntries(directory, daysOld = DEFAULT_CONFIG.workingMemoryDays) {
   const notepadPath = getNotepadPath(directory);
@@ -27489,6 +27580,38 @@ ${priorityContext}
 
 </notepad-priority>
 `;
+}
+function processRememberTags(directory, content) {
+  let processed = 0;
+  let errors5 = 0;
+  const priorityRegex = /<remember\s+priority>([\s\S]*?)<\/remember>/gi;
+  let priorityMatch;
+  while ((priorityMatch = priorityRegex.exec(content)) !== null) {
+    const priorityContent = priorityMatch[1].trim();
+    if (priorityContent) {
+      const result = setPriorityContext(directory, priorityContent);
+      if (result.success) {
+        processed++;
+        log(`Processed priority remember tag`, { length: priorityContent.length });
+      } else {
+        errors5++;
+      }
+    }
+  }
+  const regularRegex = /<remember>(?!priority)([\s\S]*?)<\/remember>/gi;
+  let regularMatch;
+  while ((regularMatch = regularRegex.exec(content)) !== null) {
+    const memoryContent = regularMatch[1].trim();
+    if (memoryContent) {
+      if (addWorkingMemoryEntry(directory, memoryContent)) {
+        processed++;
+        log(`Processed working memory remember tag`, { length: memoryContent.length });
+      } else {
+        errors5++;
+      }
+    }
+  }
+  return { processed, errors: errors5 };
 }
 
 // src/hooks/persistent-mode.ts
@@ -27983,6 +28106,46 @@ function createSystemPromptInjector(_ctx) {
   };
 }
 
+// src/hooks/remember-tag-processor.ts
+var DEFAULT_TOOLS = ["Task", "task", "call_omo_agent"];
+function createRememberTagProcessor(ctx, options = {}) {
+  const taskToolOnly = options.taskToolOnly ?? true;
+  const toolNames = options.toolNames ?? DEFAULT_TOOLS;
+  return {
+    "tool.execute.after": async (input, output) => {
+      if (taskToolOnly) {
+        if (!toolNames.includes(input.tool)) {
+          return;
+        }
+      }
+      const result = output.output;
+      if (!result) {
+        return;
+      }
+      const content = result;
+      if (!content.includes("<remember")) {
+        return;
+      }
+      log(`Processing remember tags from ${input.tool} output`);
+      const { processed, errors: errors5 } = processRememberTags(ctx.directory, content);
+      if (processed > 0) {
+        log(`Processed ${processed} remember tags`, { errors: errors5 });
+        ctx.client.tui.showToast({
+          body: {
+            title: "Memory Saved",
+            message: `${processed} item(s) saved to notepad`,
+            variant: "success",
+            duration: 2000
+          }
+        }).catch(() => {});
+      }
+      if (errors5 > 0) {
+        log(`Failed to process ${errors5} remember tags`);
+      }
+    }
+  };
+}
+
 // src/index.ts
 var OmoOmcsPlugin = async (ctx) => {
   const pluginConfig = loadConfig(ctx.directory);
@@ -28004,6 +28167,7 @@ var OmoOmcsPlugin = async (ctx) => {
   createPersistentModeHook(ctx, {
     injectNotepadContext: true
   });
+  const rememberTagProcessor = createRememberTagProcessor(ctx);
   const configHandler = createConfigHandler({
     ctx,
     pluginConfig
@@ -28053,6 +28217,16 @@ var OmoOmcsPlugin = async (ctx) => {
       }
     },
     "experimental.chat.system.transform": systemPromptInjector["experimental.chat.system.transform"],
+    "tool.execute.before": async (input, output) => {
+      if (input.tool === "task") {
+        const tools = output.args?.tools;
+        if (tools) {
+          tools.delegate_task = false;
+          log("Blocked delegate_task in task tool");
+        }
+      }
+    },
+    "tool.execute.after": rememberTagProcessor["tool.execute.after"],
     tool: {
       ...backgroundTools,
       call_omo_agent: callOmoAgent

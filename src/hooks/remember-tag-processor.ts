@@ -53,11 +53,13 @@ export function createRememberTagProcessor(
     "tool.execute.after": async (
       input: {
         tool: string;
-        sessionID?: string;
-        args?: Record<string, unknown>;
+        sessionID: string;
+        callID: string;
       },
       output: {
-        result?: unknown;
+        title: string;
+        output: string;
+        metadata: unknown;
       }
     ): Promise<void> => {
       // Check if we should process this tool
@@ -68,20 +70,13 @@ export function createRememberTagProcessor(
       }
 
       // Get tool output
-      const result = output.result;
+      const result = output.output;
       if (!result) {
         return;
       }
 
       // Convert result to string
-      let content: string;
-      if (typeof result === "string") {
-        content = result;
-      } else if (typeof result === "object") {
-        content = JSON.stringify(result);
-      } else {
-        return;
-      }
+      const content = result;
 
       // Check for <remember> tags
       if (!content.includes("<remember")) {

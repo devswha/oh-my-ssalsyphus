@@ -26,10 +26,12 @@ export declare function createRememberTagProcessor(ctx: PluginInput, options?: R
      */
     "tool.execute.after": (input: {
         tool: string;
-        sessionID?: string;
-        args?: Record<string, unknown>;
+        sessionID: string;
+        callID: string;
     }, output: {
-        result?: unknown;
+        title: string;
+        output: string;
+        metadata: unknown;
     }) => Promise<void>;
 };
 /**

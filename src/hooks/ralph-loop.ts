@@ -391,7 +391,12 @@ ${progressContext}
     if (event.type === "session.deleted") {
       const sessionInfo = props?.info as { id?: string } | undefined;
       if (sessionInfo?.id) {
+        const hadState = states.has(sessionInfo.id);
         states.delete(sessionInfo.id);
+        if (hadState) {
+          options.onModeChange?.(sessionInfo.id, null);
+          log(`Ralph loop cleared on session delete`, { sessionID: sessionInfo.id });
+        }
       }
     }
   };

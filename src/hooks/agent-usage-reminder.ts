@@ -31,8 +31,8 @@ ALWAYS prefer: Multiple parallel background_task calls > Direct tool calls
 export function createAgentUsageReminderHook(_ctx: PluginInput) {
   return {
     "tool.execute.after": async (
-      input: { tool: string; sessionID?: string },
-      output: { output?: string }
+      input: { tool: string; sessionID: string; callID: string },
+      output: { title: string; output: string; metadata: unknown }
     ): Promise<void> => {
       if (!SEARCH_TOOLS.includes(input.tool)) return;
 

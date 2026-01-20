@@ -102,7 +102,8 @@ export function updateRalphStateIteration(
   state: RalphState,
   currentStoryId?: string
 ): void {
-  state.iteration++;
+  // Note: iteration should already be incremented by caller
+  // This function just persists the state
   state.last_activity_at = new Date().toISOString();
   if (currentStoryId !== undefined) {
     state.current_story_id = currentStoryId;

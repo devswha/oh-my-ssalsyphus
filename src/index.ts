@@ -7,6 +7,7 @@ import { createConfigHandler } from "./plugin-handlers/config-handler";
 import { createRalphLoopHook } from "./hooks/ralph-loop";
 import { createPersistentModeHook, checkPersistentModes } from "./hooks/persistent-mode";
 import { createSystemPromptInjector, type ActiveMode } from "./hooks/system-prompt-injector";
+import { createRememberTagProcessor } from "./hooks/remember-tag-processor";
 import { log } from "./shared/logger";
 
 const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
@@ -36,6 +37,9 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
   createPersistentModeHook(ctx, {
     injectNotepadContext: true,
   });
+
+  // Create remember tag processor for tool.execute.after
+  const rememberTagProcessor = createRememberTagProcessor(ctx);
 
   // Create config handler for agent/command registration
   const configHandler = createConfigHandler({
@@ -107,6 +111,20 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
       }
     },
     "experimental.chat.system.transform": systemPromptInjector["experimental.chat.system.transform"],
+    "tool.execute.before": async (
+      input: { tool: string; sessionID: string; callID: string },
+      output: { args: Record<string, unknown> }
+    ): Promise<void> => {
+      // Block delegate_task in task tool to prevent infinite delegation loops
+      if (input.tool === "task") {
+        const tools = output.args?.tools as Record<string, boolean> | undefined;
+        if (tools) {
+          tools.delegate_task = false;
+          log("Blocked delegate_task in task tool");
+        }
+      }
+    },
+    "tool.execute.after": rememberTagProcessor["tool.execute.after"],
     tool: {
       ...backgroundTools,
       call_omo_agent: callOmoAgent,

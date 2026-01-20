@@ -2,8 +2,11 @@ import type { PluginInput } from "@opencode-ai/plugin";
 export declare function createAgentUsageReminderHook(_ctx: PluginInput): {
     "tool.execute.after": (input: {
         tool: string;
-        sessionID?: string;
+        sessionID: string;
+        callID: string;
     }, output: {
-        output?: string;
+        title: string;
+        output: string;
+        metadata: unknown;
     }) => Promise<void>;
 };
