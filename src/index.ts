@@ -5,6 +5,9 @@ import { createRalphLoopHook } from "./hooks/ralph-loop";
 import { createSessionRecoveryHook } from "./hooks/session-recovery";
 import { createAgentUsageReminderHook } from "./hooks/agent-usage-reminder";
 import { createSystemPromptInjector } from "./hooks/system-prompt-injector";
+import { createPersistentModeHook } from "./hooks/persistent-mode";
+import { createRememberTagProcessor } from "./hooks/remember-tag-processor";
+import { initNotepad, formatNotepadContext } from "./hooks/notepad";
 import { createBackgroundManager } from "./tools/background-manager";
 import { createBackgroundTools } from "./tools/background-tools";
 import { createCallOmoAgent } from "./tools/call-omo-agent";
@@ -71,6 +74,29 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
     );
   }
 
+  // Persistent Mode Hook (unified continuation handler)
+  // Can be used for alternative continuation logic or session.idle handling
+  const _persistentModeHook = isHookEnabled("persistent-mode")
+    ? createPersistentModeHook(ctx, {
+        maxTodoContinuationAttempts: 5,
+        injectNotepadContext: true,
+        pruneOnStart: true,
+      })
+    : null;
+  // Note: persistentModeHook can be used via _persistentModeHook.checkOnIdle(sessionId)
+  void _persistentModeHook; // Silence unused variable warning
+
+  // Remember Tag Processor Hook
+  const rememberTagProcessor = isHookEnabled("remember-tag-processor")
+    ? createRememberTagProcessor(ctx, {
+        taskToolOnly: true,
+        toolNames: ["Task", "task", "call_omo_agent"],
+      })
+    : null;
+
+  // Initialize notepad on startup
+  initNotepad(ctx.directory);
+
   const backgroundTools = createBackgroundTools(backgroundManager, ctx.client);
   const callOmoAgent = createCallOmoAgent(ctx, backgroundManager);
 
@@ -101,6 +127,27 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
         if (!sessionInfo?.parentID) {
           mainSessionID = sessionInfo?.id;
           setMainSessionID(mainSessionID);
+        }
+
+        // Inject notepad context on session start (for main session only)
+        if (sessionInfo?.id && !sessionInfo?.parentID) {
+          const notepadContext = formatNotepadContext(ctx.directory);
+          if (notepadContext) {
+            ctx.client.session
+              .prompt({
+                path: { id: sessionInfo.id },
+                body: {
+                  parts: [
+                    {
+                      type: "text",
+                      text: `<session-restore>\n\n${notepadContext}\n</session-restore>`,
+                    },
+                  ],
+                },
+                query: { directory: ctx.directory },
+              })
+              .catch(() => {});
+          }
         }
       }
 
@@ -136,6 +183,9 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
 
     "tool.execute.after": async (input, output) => {
       await agentUsageReminder?.["tool.execute.after"]?.(input, output);
+      // Cast output to compatible type for remember tag processor
+      const toolOutput = output as { result?: unknown };
+      await rememberTagProcessor?.["tool.execute.after"]?.(input, toolOutput);
     },
   };
 };

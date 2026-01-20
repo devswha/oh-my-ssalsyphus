@@ -9,3 +9,51 @@ export { getContinuationMessage, getProgressSummary, getToastMessage } from "./c
 export type { ContinuationContext } from "./continuation-messages";
 export type { ActiveMode } from "./system-prompt-injector";
 export type { PRD, UserStory } from "./ralph-loop";
+
+// Notepad - Compaction Resilient Memory
+export {
+  initNotepad,
+  readNotepad,
+  getNotepadPath,
+  getPriorityContext,
+  getWorkingMemory,
+  getManualSection,
+  setPriorityContext,
+  addWorkingMemoryEntry,
+  addManualEntry,
+  pruneOldEntries,
+  getNotepadStats,
+  formatNotepadContext,
+  formatFullNotepad,
+  processRememberTags,
+  NOTEPAD_FILENAME,
+  PRIORITY_HEADER,
+  WORKING_MEMORY_HEADER,
+  MANUAL_HEADER,
+  DEFAULT_CONFIG as NOTEPAD_DEFAULT_CONFIG,
+} from "./notepad";
+export type {
+  NotepadConfig,
+  NotepadStats,
+  PriorityContextResult,
+  PruneResult,
+} from "./notepad";
+
+// Persistent Mode - Unified Continuation Handler
+export {
+  createPersistentModeHook,
+  checkPersistentModes,
+  resetTodoContinuationAttempts,
+} from "./persistent-mode";
+export type {
+  PersistentModeResult,
+  PersistentModeOptions,
+} from "./persistent-mode";
+
+// Remember Tag Processor
+export {
+  createRememberTagProcessor,
+  extractRememberTags,
+  formatRememberTag,
+} from "./remember-tag-processor";
+export type { RememberTagProcessorOptions } from "./remember-tag-processor";

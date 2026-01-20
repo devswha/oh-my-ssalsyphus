@@ -50,7 +50,10 @@ export type HookName =
   | "agent-usage-reminder"
   | "context-window-monitor"
   | "comment-checker"
-  | "tool-output-truncator";
+  | "tool-output-truncator"
+  | "system-prompt-injector"
+  | "persistent-mode"
+  | "remember-tag-processor";
 
 export type AgentName =
   | "oracle"

@@ -14,11 +14,14 @@
 | TODO Continuation | ✅ | Injects continuation prompt on `session.idle` event |
 | Background Agents | ✅ | `explore`, `librarian` via `background_task` tool |
 | Session Recovery | ✅ | Handles session errors and recovery |
+| Notepad Memory System | ✅ | Compaction-resilient memory with `<remember>` tags |
+| Remember Tag Processor | ✅ | Post-tool-use hook for memory persistence |
+| Persistent Mode Handler | ✅ | Unified continuation handler (Ralph > Ultrawork > Todo) |
 
 ### Test Coverage
 
-- 20 tests passing (unit + integration)
-- Covers: keyword detection, system prompt injection, ralph-loop state, plugin lifecycle
+- 40 tests passing (unit + integration)
+- Covers: keyword detection, system prompt injection, ralph-loop state, plugin lifecycle, notepad system
 
 ---
 
@@ -326,6 +329,9 @@ Feature request for OpenCode plugin API:
 | Oracle Verification | ✅ | ✅ | ✅ Done (Phase 3) |
 | Continuation Messages | ✅ Varied | ✅ Varied | ✅ Done (Phase 4) |
 | Cross-Session State | ✅ ~/.claude/ | ✅ ~/.opencode/ | ✅ Done (Phase 1) |
+| Notepad Memory | ✅ | ✅ | ✅ Done |
+| Remember Tags | ✅ | ✅ | ✅ Done |
+| Mnemosyne Skills | ✅ | ❌ | ⏳ Future |
 
 ---
 
