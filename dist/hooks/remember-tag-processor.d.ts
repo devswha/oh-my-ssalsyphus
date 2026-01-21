@@ -2,7 +2,7 @@
  * Remember Tag Processor Hook
  *
  * Processes <remember> tags from Task agent output.
- * Saves to .sisyphus/notepad.md for compaction-resilient memory.
+ * Saves to .omc/notepad.md for compaction-resilient memory.
  *
  * Based on oh-my-claude-sisyphus post-tool-use hook.
  *

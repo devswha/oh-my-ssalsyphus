@@ -1,8 +1,8 @@
 # oh-my-ssalsyphus
 
-> 🔄 **OpenCode port of [oh-my-claude-sisyphus](https://github.com/Yeachan-Heo/oh-my-claude-sisyphus)**
+> 🔄 **OpenCode port of [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) v3.0.11**
 
-**Oh My Ssal Sisyphus** - Multi-agent orchestration plugin that brings [oh-my-claude-sisyphus](https://github.com/Yeachan-Heo/oh-my-claude-sisyphus) features to [OpenCode](https://github.com/opencode-ai/opencode).
+**Oh My Ssal Sisyphus** - Multi-agent orchestration plugin that brings [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) features to [OpenCode](https://github.com/opencode-ai/opencode).
 
 Like Sisyphus condemned to roll his boulder eternally, this plugin ensures your AI assistant **never stops until the task is complete**.
 
@@ -10,11 +10,11 @@ Like Sisyphus condemned to roll his boulder eternally, this plugin ensures your 
 
 ## 🎯 What is this?
 
-This project **ports the powerful features** of [oh-my-claude-sisyphus](https://github.com/Yeachan-Heo/oh-my-claude-sisyphus) (a Claude Code plugin) to the **OpenCode platform**.
+This project **ports the powerful features** of [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) v3.0.11 (a Claude Code plugin) to the **OpenCode platform**.
 
 | Original (Claude Code) | This Port (OpenCode) |
 |------------------------|----------------------|
-| [oh-my-claude-sisyphus](https://github.com/Yeachan-Heo/oh-my-claude-sisyphus) | **oh-my-ssalsyphus** |
+| [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) | **oh-my-ssalsyphus** |
 | Shell hooks + Node.js bridge | Native TypeScript plugin API |
 | Stop hook (proactive blocking) | session.idle event (reactive) |
 
@@ -41,15 +41,29 @@ This project **ports the powerful features** of [oh-my-claude-sisyphus](https://
 
 ### Specialized Agents
 
-| Agent | Model | Purpose |
-|-------|-------|---------|
-| `oracle` | Opus | Architecture & debugging advisor |
-| `librarian` | Sonnet | Documentation & reference researcher |
-| `explore` | Haiku | Fast codebase search |
-| `frontend-engineer` | Sonnet | UI/UX implementation |
-| `document-writer` | Haiku | Technical documentation |
-| `sisyphus-junior` | Sonnet | Focused task executor |
-| `qa-tester` | Sonnet | Interactive CLI testing |
+> **Note:** New agent names are available with backward compatibility for legacy names.
+
+| Agent (New) | Alias (Legacy) | Model | Purpose |
+|-------------|----------------|-------|---------|
+| `architect` | `oracle` | Opus | Strategic architecture & debugging advisor (READ-ONLY) |
+| `architect-medium` | `oracle-medium` | Sonnet | Balanced architectural analysis (READ-ONLY) |
+| `architect-low` | `oracle-low` | Haiku | Fast architectural checks (READ-ONLY) |
+| `researcher` | `librarian` | Sonnet | Documentation & reference researcher |
+| `researcher-low` | `librarian-low` | Haiku | Quick documentation lookup |
+| `explore` | - | Haiku | Fast codebase search |
+| `explore-medium` | - | Sonnet | Deeper codebase analysis |
+| `designer` | `frontend-engineer` | Sonnet | UI/UX designer-developer |
+| `designer-low` | `frontend-engineer-low` | Haiku | Fast UI changes |
+| `designer-high` | `frontend-engineer-high` | Opus | Complex UI architecture |
+| `writer` | `document-writer` | Haiku | Technical documentation |
+| `executor` | `sisyphus-junior` | Sonnet | Focused task executor |
+| `executor-low` | `sisyphus-junior-low` | Haiku | Simple task execution |
+| `executor-high` | `sisyphus-junior-high` | Opus | Complex multi-file tasks |
+| `planner` | `prometheus` | Opus | Strategic planning |
+| `analyst` | `metis` | Opus | Pre-planning analysis |
+| `critic` | `momus` | Opus | Plan review |
+| `vision` | `multimodal-looker` | Sonnet | Visual/media analysis |
+| `qa-tester` | - | Sonnet | Interactive CLI testing |
 
 ## Installation
 
@@ -89,6 +103,21 @@ ulw refactor the database layer
 ```
 
 Keywords: `ultrawork`, `ulw`, `uw`
+
+### Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/ultrawork <task>` | Maximum intensity parallel execution |
+| `/ralph-loop <task>` | Completion guarantee loop |
+| `/ultrawork-ralph <task>` | Combined max intensity + completion guarantee |
+| `/ultraqa <goal>` | QA cycling workflow |
+| `/ralplan <task>` | Iterative planning with Planner/Architect/Critic |
+| `/plan <task>` | Start planning session |
+| `/review <plan>` | Review plan with Critic |
+| `/doctor` | Diagnose installation issues |
+| `/cancel-ralph` | Cancel Ralph Loop |
+| `/cancel-ultraqa` | Cancel UltraQA |
 
 ### Ralph Loop
 
@@ -264,10 +293,10 @@ Named after Sisyphus from Greek mythology - condemned to roll a boulder up a hil
 
 ## Credits
 
-This project is an **OpenCode port** of [oh-my-claude-sisyphus](https://github.com/Yeachan-Heo/oh-my-claude-sisyphus) by [@Yeachan-Heo](https://github.com/Yeachan-Heo).
+This project is an **OpenCode port** of [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) by [@Yeachan-Heo](https://github.com/Yeachan-Heo).
 
 Special thanks to:
-- [oh-my-claude-sisyphus](https://github.com/Yeachan-Heo/oh-my-claude-sisyphus) - The original Claude Code plugin this project ports
+- [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) - The original Claude Code plugin this project ports
 - [OpenCode](https://github.com/opencode-ai/opencode) - The target platform
 
 ## License

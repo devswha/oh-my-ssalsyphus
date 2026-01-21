@@ -107,8 +107,8 @@ Task: ${task}
 
 You are now in ULTRAWORK-RALPH mode. Maximum intensity with completion guarantee.
 - PARALLEL EVERYTHING
-- DELEGATE AGGRESSIVELY  
-- Create and track PRD in .sisyphus/prd.json
+- DELEGATE AGGRESSIVELY
+- Create and track PRD in .omc/prd.json
 - Do NOT stop until you output: <promise>TASK_COMPLETE</promise>`,
         });
         return;
@@ -165,7 +165,7 @@ You are now in ULTRAWORK-RALPH mode. Maximum intensity with completion guarantee
         output.parts.push({
           type: "text",
           text: `\n\n[ANALYZE MODE]
-- Consult oracle for architectural guidance
+- Consult architect for architectural guidance
 - Gather comprehensive context before conclusions
 - Consider multiple perspectives`,
         });

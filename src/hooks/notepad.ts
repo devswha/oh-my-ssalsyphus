@@ -75,23 +75,23 @@ export const MANUAL_HEADER = "## MANUAL";
 // ============================================================================
 
 /**
- * Get the path to notepad.md in .sisyphus subdirectory
+ * Get the path to notepad.md in .omc subdirectory
  */
 export function getNotepadPath(directory: string): string {
-  return path.join(directory, ".sisyphus", NOTEPAD_FILENAME);
+  return path.join(directory, ".omc", NOTEPAD_FILENAME);
 }
 
 /**
- * Ensure .sisyphus directory exists
+ * Ensure .omc directory exists
  */
 function ensureSisyphusDir(directory: string): boolean {
-  const sisyphusDir = path.join(directory, ".sisyphus");
+  const sisyphusDir = path.join(directory, ".omc");
   if (!fs.existsSync(sisyphusDir)) {
     try {
       fs.mkdirSync(sisyphusDir, { recursive: true });
       return true;
     } catch (err) {
-      log(`Failed to create .sisyphus directory`, { error: String(err) });
+      log(`Failed to create .omc directory`, { error: String(err) });
       return false;
     }
   }

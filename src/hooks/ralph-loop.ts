@@ -54,7 +54,7 @@ export function createRalphLoopHook(ctx: PluginInput, options: RalphLoopOptions 
   const isEnabled = options.config?.enabled !== false;
 
   const getSisyphusDir = (): string => {
-    return path.join(ctx.directory, ".sisyphus");
+    return path.join(ctx.directory, ".omc");
   };
 
   const getPrdPath = (): string => {
@@ -302,9 +302,9 @@ ${prdContext}
 ${progressContext}
 
 **REMINDER**:
-- Check .sisyphus/prd.json for user stories
+- Check .omc/prd.json for user stories
 - Update story "passes" to true when complete
-- Log learnings in .sisyphus/progress.txt
+- Log learnings in .omc/progress.txt
 - Only output the promise tag when ALL stories pass`;
 
       try {

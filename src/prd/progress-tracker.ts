@@ -6,7 +6,7 @@ import type { UserStory } from "./prd-manager";
 const PROGRESS_FILENAME = "progress.txt";
 
 function getSisyphusDir(projectDir: string): string {
-  return path.join(projectDir, ".sisyphus");
+  return path.join(projectDir, ".omc");
 }
 
 function getProgressPath(projectDir: string): string {

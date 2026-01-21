@@ -14,12 +14,12 @@ export interface UltraworkState {
 const STATE_FILENAME = "ultrawork-state.json";
 const GLOBAL_STATE_DIR = path.join(process.env.HOME || "", ".opencode");
 
-function getSisyphusDir(projectDir: string): string {
-  return path.join(projectDir, ".sisyphus");
+function getOmcDir(projectDir: string): string {
+  return path.join(projectDir, ".omc");
 }
 
 function getStatePath(projectDir: string): string {
-  return path.join(getSisyphusDir(projectDir), STATE_FILENAME);
+  return path.join(getOmcDir(projectDir), STATE_FILENAME);
 }
 
 function getGlobalStatePath(): string {
@@ -59,7 +59,7 @@ export function writeUltraworkState(
   writeGlobal: boolean = false
 ): void {
   // Write to local project state
-  const localDir = getSisyphusDir(projectDir);
+  const localDir = getOmcDir(projectDir);
   ensureDir(localDir);
   const localPath = getStatePath(projectDir);
 

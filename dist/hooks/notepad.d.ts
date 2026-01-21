@@ -47,7 +47,7 @@ export declare const PRIORITY_HEADER = "## Priority Context";
 export declare const WORKING_MEMORY_HEADER = "## Working Memory";
 export declare const MANUAL_HEADER = "## MANUAL";
 /**
- * Get the path to notepad.md in .sisyphus subdirectory
+ * Get the path to notepad.md in .omc subdirectory
  */
 export declare function getNotepadPath(directory: string): string;
 /**

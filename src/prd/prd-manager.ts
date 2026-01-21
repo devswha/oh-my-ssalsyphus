@@ -25,7 +25,7 @@ export interface PRD {
 const PRD_FILENAME = "prd.json";
 
 function getSisyphusDir(projectDir: string): string {
-  return path.join(projectDir, ".sisyphus");
+  return path.join(projectDir, ".omc");
 }
 
 function getPrdPath(projectDir: string): string {
@@ -216,7 +216,7 @@ ${nextStory.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 ---
 
 When this story is complete:
-1. Update .sisyphus/prd.json to set "passes": true for ${nextStory.id}
-2. Add any learnings to .sisyphus/progress.txt
+1. Update .omc/prd.json to set "passes": true for ${nextStory.id}
+2. Add any learnings to .omc/progress.txt
 3. Move to the next story or output completion promise if all done`;
 }

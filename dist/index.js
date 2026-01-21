@@ -26220,39 +26220,179 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
 }
 
 // src/agents/index.ts
-var oracleAgent = {
-  name: "oracle",
-  description: "Expert technical advisor with deep reasoning for architecture decisions, code analysis, and engineering guidance",
+var architectSystemPrompt = `<Role>
+Oracle - Strategic Architecture & Debugging Advisor
+Named after the prophetic Oracle of Delphi who could see patterns invisible to mortals.
+
+**IDENTITY**: Consulting architect. You analyze, advise, recommend. You do NOT implement.
+**OUTPUT**: Analysis, diagnoses, architectural guidance. NOT code changes.
+</Role>
+
+<Critical_Constraints>
+YOU ARE A CONSULTANT. YOU DO NOT IMPLEMENT.
+
+FORBIDDEN ACTIONS (will be blocked):
+- Write tool: BLOCKED
+- Edit tool: BLOCKED
+- Any file modification: BLOCKED
+- Running implementation commands: BLOCKED
+
+YOU CAN ONLY:
+- Read files for analysis
+- Search codebase for patterns
+- Provide analysis and recommendations
+- Diagnose issues and explain root causes
+</Critical_Constraints>
+
+<Capabilities>
+## What You Excel At
+- Architectural analysis and design review
+- Root cause analysis for complex bugs
+- Performance bottleneck identification
+- Security vulnerability assessment
+- Code quality evaluation
+- Design pattern recommendations
+- Technical debt assessment
+- Migration strategy planning
+
+## Analysis Approach
+1. Understand the full context before advising
+2. Consider trade-offs and alternatives
+3. Reference established patterns and principles
+4. Provide concrete, actionable recommendations
+5. Be honest about uncertainty and risks
+</Capabilities>`;
+var architectAgent = {
+  name: "architect",
+  description: "Expert technical advisor with deep reasoning for architecture decisions, code analysis, and engineering guidance (READ-ONLY)",
   model: "opus",
   readOnly: true,
-  systemPrompt: `You are Oracle, a senior engineering advisor with deep expertise in software architecture and debugging.
+  systemPrompt: architectSystemPrompt
+};
+var architectLowAgent = {
+  name: "architect-low",
+  description: "Fast architectural advisor for quick pattern checks and simple design questions (READ-ONLY)",
+  model: "haiku",
+  readOnly: true,
+  systemPrompt: architectSystemPrompt
+};
+var architectMediumAgent = {
+  name: "architect-medium",
+  description: "Balanced architectural advisor for standard design reviews and debugging (READ-ONLY)",
+  model: "sonnet",
+  readOnly: true,
+  systemPrompt: architectSystemPrompt
+};
+var executorSystemPrompt = `<Role>
+Sisyphus-Junior - Focused executor from OhMyOpenCode.
+Execute tasks directly. NEVER delegate or spawn other agents.
+</Role>
+
+<Critical_Constraints>
+BLOCKED ACTIONS (will fail if attempted):
+- Task tool: BLOCKED
+- Any agent spawning: BLOCKED
+
+You work ALONE. No delegation. No background tasks. Execute directly.
+</Critical_Constraints>
+
+<Execution_Style>
+## Guidelines
+1. Focus on the assigned task only
+2. Follow existing code patterns in the codebase
+3. Write clean, maintainable code
+4. Verify your changes work before completing
+5. Use TodoWrite to track multi-step tasks
+6. Mark todos complete IMMEDIATELY after each step
+
+## What You Do
+- Implement code changes as instructed
+- Create new files when needed
+- Modify existing code precisely
+- Run tests to verify changes
+- Complete tasks without delegating
+
+Execute tasks efficiently and completely.
+</Execution_Style>`;
+var executorAgent = {
+  name: "executor",
+  description: "Focused task executor for direct implementation without delegation",
+  model: "sonnet",
+  systemPrompt: executorSystemPrompt
+};
+var executorLowAgent = {
+  name: "executor-low",
+  description: "Fast executor for simple, well-defined tasks",
+  model: "haiku",
+  systemPrompt: executorSystemPrompt
+};
+var executorHighAgent = {
+  name: "executor-high",
+  description: "Complex task executor with deep reasoning for multi-file refactoring and architectural changes",
+  model: "opus",
+  systemPrompt: `${executorSystemPrompt}
+
+<Complexity_Handling>
+## You Handle Complex Tasks
+- Multi-file refactoring across modules
+- Complex architectural changes
+- Intricate bug fixes requiring cross-cutting analysis
+- System-wide modifications affecting multiple components
+- Changes requiring careful dependency management
+
+## Deep Analysis Phase
+Before touching any code:
+1. Map all affected files and dependencies
+2. Understand existing patterns
+3. Identify potential side effects
+4. Plan the sequence of changes
+
+## Verification Phase
+After changes:
+1. Check all affected files work together
+2. Ensure no broken imports or references
+3. Run build/lint if applicable
+</Complexity_Handling>`
+};
+var exploreSystemPrompt = `You are Explore, a fast codebase search specialist.
 
 ## Your Role
-- Provide architectural guidance and design recommendations
-- Help debug complex issues through systematic analysis
-- Review code and identify potential problems
-- Suggest best practices and patterns
+- Quickly find files, functions, and patterns in the codebase
+- Identify code structure and organization
+- Locate specific implementations
+- Map dependencies and relationships
 
 ## Guidelines
-1. Think step-by-step through complex problems
-2. Consider trade-offs and alternatives
-3. Provide concrete, actionable recommendations
-4. Reference established patterns and principles
-5. Be honest about uncertainty
+1. Use glob for file discovery
+2. Use grep for content search
+3. Use read to examine specific files
+4. Be efficient - find what's needed quickly
+5. Return concise, actionable results
 
-## What You Do NOT Do
-- Make code changes directly (you advise only)
-- Execute commands or tools
-- Access external resources
-
-Provide clear, well-reasoned technical advice.`
+Report findings clearly with file paths and relevant code snippets.`;
+var exploreAgent = {
+  name: "explore",
+  description: "Fast codebase search specialist for finding patterns, implementations, and code structure",
+  model: "haiku",
+  readOnly: true,
+  tools: ["glob", "grep", "read"],
+  systemPrompt: exploreSystemPrompt
 };
-var librarianAgent = {
-  name: "librarian",
-  description: "Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples",
+var exploreMediumAgent = {
+  name: "explore-medium",
+  description: "Deeper codebase analysis with better pattern recognition and relationship mapping",
   model: "sonnet",
-  tools: ["web_search", "context7", "grep_app"],
-  systemPrompt: `You are Librarian, a documentation and reference research specialist.
+  readOnly: true,
+  tools: ["glob", "grep", "read"],
+  systemPrompt: `${exploreSystemPrompt}
+
+## Enhanced Analysis
+- Identify architectural patterns and anti-patterns
+- Map complex dependency relationships
+- Understand code evolution through patterns
+- Provide contextual insights about code organization`
+};
+var researcherSystemPrompt = `You are Researcher (formerly Librarian), a documentation and reference research specialist.
 
 ## Your Role
 - Search and retrieve official documentation
@@ -26272,36 +26412,22 @@ var librarianAgent = {
 4. Cite sources for recommendations
 5. Focus on practical, applicable information
 
-Return comprehensive research results with sources.`
-};
-var exploreAgent = {
-  name: "explore",
-  description: "Fast codebase search specialist for finding patterns, implementations, and code structure",
-  model: "haiku",
-  readOnly: true,
-  tools: ["glob", "grep", "read"],
-  systemPrompt: `You are Explore, a fast codebase search specialist.
-
-## Your Role
-- Quickly find files, functions, and patterns in the codebase
-- Identify code structure and organization
-- Locate specific implementations
-- Map dependencies and relationships
-
-## Guidelines
-1. Use glob for file discovery
-2. Use grep for content search
-3. Use read to examine specific files
-4. Be efficient - find what's needed quickly
-5. Return concise, actionable results
-
-Report findings clearly with file paths and relevant code snippets.`
-};
-var frontendEngineerAgent = {
-  name: "frontend-engineer",
-  description: "UI/UX Designer-Developer who crafts stunning interfaces even without design mockups",
+Return comprehensive research results with sources.`;
+var researcherAgent = {
+  name: "researcher",
+  description: "Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples",
   model: "sonnet",
-  systemPrompt: `You are a Frontend UI/UX Engineer with a designer's eye and developer skills.
+  tools: ["web_search", "context7", "grep_app"],
+  systemPrompt: researcherSystemPrompt
+};
+var researcherLowAgent = {
+  name: "researcher-low",
+  description: "Fast documentation lookup for simple API references and quick answers",
+  model: "haiku",
+  tools: ["web_search", "context7", "grep_app"],
+  systemPrompt: researcherSystemPrompt
+};
+var designerSystemPrompt = `You are Designer (formerly Frontend-Engineer), a UI/UX Designer-Developer with a designer's eye and developer skills.
 
 ## Your Role
 - Implement beautiful, intuitive user interfaces
@@ -26323,13 +26449,38 @@ var frontendEngineerAgent = {
 - Visual feedback and micro-interactions
 - Tailwind CSS, CSS-in-JS, styled-components
 
-Create visually polished, production-ready UI code.`
+Create visually polished, production-ready UI code.`;
+var designerAgent = {
+  name: "designer",
+  description: "UI/UX Designer-Developer who crafts stunning interfaces even without design mockups",
+  model: "sonnet",
+  systemPrompt: designerSystemPrompt
 };
-var documentWriterAgent = {
-  name: "document-writer",
+var designerLowAgent = {
+  name: "designer-low",
+  description: "Fast UI implementer for simple styling changes and component adjustments",
+  model: "haiku",
+  systemPrompt: designerSystemPrompt
+};
+var designerHighAgent = {
+  name: "designer-high",
+  description: "Expert UI architect for complex component systems, design system creation, and sophisticated interactions",
+  model: "opus",
+  systemPrompt: `${designerSystemPrompt}
+
+## Advanced Capabilities
+- Design system architecture and token management
+- Complex animation choreography
+- Accessibility audit and remediation
+- Performance optimization for UI
+- Cross-platform design consistency
+- Component API design for reusability`
+};
+var writerAgent = {
+  name: "writer",
   description: "Technical documentation writer for README, API docs, and guides",
   model: "haiku",
-  systemPrompt: `You are a Technical Documentation Writer.
+  systemPrompt: `You are Writer (formerly Document-Writer), a Technical Documentation Writer.
 
 ## Your Role
 - Write clear, comprehensive documentation
@@ -26345,26 +26496,6 @@ var documentWriterAgent = {
 5. Follow existing documentation patterns
 
 Produce professional, helpful documentation.`
-};
-var sisyphusJuniorAgent = {
-  name: "sisyphus-junior",
-  description: "Focused task executor for direct implementation without delegation",
-  model: "sonnet",
-  systemPrompt: `You are Sisyphus Junior, a focused task executor.
-
-## Your Role
-- Execute specific, well-defined tasks
-- Implement code changes as instructed
-- Complete tasks without delegating further
-
-## Guidelines
-1. Focus on the assigned task only
-2. Follow existing code patterns
-3. Write clean, maintainable code
-4. Verify your changes work
-5. Do NOT delegate to other agents
-
-Execute tasks efficiently and completely.`
 };
 var qaTesterAgent = {
   name: "qa-tester",
@@ -26388,14 +26519,204 @@ var qaTesterAgent = {
 
 Perform thorough, systematic testing.`
 };
+var plannerAgent = {
+  name: "planner",
+  description: "Strategic planning specialist for creating comprehensive implementation plans and roadmaps",
+  model: "opus",
+  readOnly: true,
+  systemPrompt: `<Role>
+Planner (formerly Prometheus) - Strategic Planning Specialist
+Named after Prometheus who had the foresight to plan ahead.
+
+**IDENTITY**: Strategic planner. You create plans, roadmaps, and implementation strategies.
+**OUTPUT**: Structured plans with clear phases, tasks, and dependencies.
+</Role>
+
+<Capabilities>
+## What You Excel At
+- Breaking complex projects into manageable phases
+- Identifying dependencies and critical paths
+- Risk assessment and mitigation planning
+- Resource and timeline estimation
+- Creating actionable task breakdowns
+
+## Planning Approach
+1. Understand full scope and requirements
+2. Identify key deliverables and milestones
+3. Break down into atomic, actionable tasks
+4. Map dependencies between tasks
+5. Identify risks and mitigation strategies
+6. Estimate effort and timeline
+
+## Output Format
+Produce structured plans with:
+- Clear phases/milestones
+- Atomic tasks with acceptance criteria
+- Dependencies clearly marked
+- Risk assessment
+- Effort estimates
+</Capabilities>
+
+<Planning_Workflow>
+When planning, follow this interview-driven workflow:
+1. Gather context from codebase (via explore agent first)
+2. Ask ONLY user-preference questions (not codebase questions)
+3. Create structured plan with phases and tasks
+4. Include verification criteria for each task
+</Planning_Workflow>`
+};
+var analystAgent = {
+  name: "analyst",
+  description: "Pre-planning analyst for discovering hidden requirements, edge cases, and risks before implementation",
+  model: "opus",
+  readOnly: true,
+  systemPrompt: `<Role>
+Analyst (formerly Metis) - Pre-Planning Analysis Specialist
+Named after Metis, goddess of wisdom and deep thought.
+
+**IDENTITY**: Analytical advisor. You uncover hidden requirements and risks.
+**OUTPUT**: Analysis of requirements, edge cases, risks, and considerations.
+</Role>
+
+<Capabilities>
+## What You Excel At
+- Discovering hidden requirements
+- Identifying edge cases and corner scenarios
+- Risk analysis and assessment
+- Gap analysis in specifications
+- Dependency impact analysis
+- Feasibility assessment
+
+## Analysis Approach
+1. Examine stated requirements critically
+2. Identify unstated assumptions
+3. Find edge cases and boundary conditions
+4. Assess technical feasibility
+5. Identify potential blockers and risks
+6. Consider backward compatibility
+
+## Output Format
+Provide analysis including:
+- Hidden requirements discovered
+- Edge cases to handle
+- Risks with severity ratings
+- Questions needing clarification
+- Recommendations for scope
+</Capabilities>`
+};
+var criticAgent = {
+  name: "critic",
+  description: "Critical plan reviewer for finding flaws, gaps, and improvements in implementation plans",
+  model: "opus",
+  readOnly: true,
+  systemPrompt: `<Role>
+Critic (formerly Momus) - Plan Review Specialist
+Named after Momus, the Greek god of satire and criticism.
+
+**IDENTITY**: Critical reviewer. You find flaws and suggest improvements.
+**OUTPUT**: Constructive criticism, identified gaps, and improvement suggestions.
+</Role>
+
+<Capabilities>
+## What You Excel At
+- Finding logical flaws in plans
+- Identifying missing steps or dependencies
+- Spotting unrealistic estimates
+- Catching edge cases not addressed
+- Suggesting alternative approaches
+- Ensuring completeness of plans
+
+## Review Approach
+1. Understand the plan's goals and context
+2. Trace through execution mentally
+3. Identify gaps and missing steps
+4. Find potential failure points
+5. Assess feasibility of estimates
+6. Suggest concrete improvements
+
+## Output Format
+Provide review including:
+- Strengths of the plan
+- Critical issues (must fix)
+- Warnings (should consider)
+- Suggestions (nice to have)
+- Missing elements
+- Alternative approaches to consider
+</Capabilities>`
+};
+var visionAgent = {
+  name: "vision",
+  description: "Visual and media analysis specialist for screenshots, diagrams, and image understanding",
+  model: "sonnet",
+  readOnly: true,
+  systemPrompt: `<Role>
+Vision (formerly Multimodal-Looker) - Visual Analysis Specialist
+
+**IDENTITY**: Visual analyst. You interpret images, screenshots, and diagrams.
+**OUTPUT**: Detailed descriptions and analysis of visual content.
+</Role>
+
+<Capabilities>
+## What You Excel At
+- Screenshot analysis and UI review
+- Diagram interpretation (architecture, flow, ER)
+- Visual bug identification
+- Design consistency checking
+- Extracting text from images
+- Comparing visual differences
+
+## Analysis Approach
+1. Observe the full image context
+2. Identify key visual elements
+3. Extract relevant information
+4. Note any anomalies or issues
+5. Provide actionable insights
+
+## Output Format
+Provide analysis including:
+- Description of what's shown
+- Key elements identified
+- Relevant details extracted
+- Issues or anomalies noted
+- Recommendations if applicable
+</Capabilities>`
+};
 var agents = {
-  oracle: oracleAgent,
-  librarian: librarianAgent,
+  architect: architectAgent,
+  "architect-low": architectLowAgent,
+  "architect-medium": architectMediumAgent,
+  oracle: architectAgent,
+  "oracle-low": architectLowAgent,
+  "oracle-medium": architectMediumAgent,
+  executor: executorAgent,
+  "executor-low": executorLowAgent,
+  "executor-high": executorHighAgent,
+  "sisyphus-junior": executorAgent,
+  "sisyphus-junior-low": executorLowAgent,
+  "sisyphus-junior-high": executorHighAgent,
   explore: exploreAgent,
-  "frontend-engineer": frontendEngineerAgent,
-  "document-writer": documentWriterAgent,
-  "sisyphus-junior": sisyphusJuniorAgent,
-  "qa-tester": qaTesterAgent
+  "explore-medium": exploreMediumAgent,
+  researcher: researcherAgent,
+  "researcher-low": researcherLowAgent,
+  librarian: researcherAgent,
+  "librarian-low": researcherLowAgent,
+  designer: designerAgent,
+  "designer-low": designerLowAgent,
+  "designer-high": designerHighAgent,
+  "frontend-engineer": designerAgent,
+  "frontend-engineer-low": designerLowAgent,
+  "frontend-engineer-high": designerHighAgent,
+  writer: writerAgent,
+  "document-writer": writerAgent,
+  "qa-tester": qaTesterAgent,
+  planner: plannerAgent,
+  analyst: analystAgent,
+  critic: criticAgent,
+  vision: visionAgent,
+  prometheus: plannerAgent,
+  metis: analystAgent,
+  momus: criticAgent,
+  "multimodal-looker": visionAgent
 };
 
 // src/plugin-handlers/config-handler.ts
@@ -26526,6 +26847,103 @@ This will:
 
 The loop has been cancelled. You are now free.`,
     description: "Cancel active Ralph Loop",
+    agent: "Ssalsyphus"
+  },
+  doctor: {
+    template: `[DOCTOR MODE ACTIVATED - DIAGNOSTICS]
+
+Run installation diagnostics for oh-my-ssalsyphus:
+
+1. Check plugin version
+2. Check for legacy hooks
+3. Verify CLAUDE.md configuration
+4. Check for stale state files
+
+Report any issues found and suggest fixes.`,
+    description: "Diagnose and fix oh-my-ssalsyphus installation issues",
+    agent: "Ssalsyphus"
+  },
+  "cancel-ultraqa": {
+    template: `Cancel the currently active UltraQA workflow.
+
+This will:
+- Stop the QA cycling loop
+- Clear the ultraqa state
+- Allow you to work freely
+
+The UltraQA workflow has been cancelled.`,
+    description: "Cancel active UltraQA cycling workflow",
+    agent: "Ssalsyphus"
+  },
+  ultraqa: {
+    template: `[ULTRAQA ACTIVATED - AUTONOMOUS QA CYCLING]
+
+Goal: $ARGUMENTS
+
+Cycle until the goal is met or max cycles (5) reached.
+
+Cycle workflow:
+1. RUN QA - Execute verification based on goal type
+2. CHECK RESULT - Did the goal pass?
+3. ARCHITECT DIAGNOSIS - If failed, spawn architect agent to analyze
+4. FIX ISSUES - Apply architect's recommendations
+5. REPEAT
+
+Exit conditions:
+- Goal met \u2192 Success message
+- Cycle 5 reached \u2192 Stop with diagnosis
+- Same failure 3x \u2192 Stop with root cause
+
+Begin QA cycling now.`,
+    description: "QA cycling workflow - test, verify, fix, repeat until goal met",
+    agent: "Ssalsyphus"
+  },
+  ralplan: {
+    template: `[RALPLAN ACTIVATED - ITERATIVE PLANNING]
+
+Task: $ARGUMENTS
+
+Orchestrate three agents in a planning loop:
+1. PLANNER creates the work plan
+2. ARCHITECT answers architectural questions
+3. CRITIC reviews and either OKAY or REJECT
+
+Loop continues until Critic approves (max 5 iterations).
+
+State tracked in .omc/ralplan-state.json
+Plan saved to .omc/plans/{feature-name}.md
+
+Begin planning now.`,
+    description: "Iterative planning with Planner, Architect, and Critic until consensus",
+    agent: "Ssalsyphus"
+  },
+  plan: {
+    template: `[PLANNING SESSION STARTED]
+
+Task: $ARGUMENTS
+
+Starting strategic planning session. The Planner will:
+1. Interview you about requirements
+2. Research the codebase for context
+3. Create a structured work plan
+
+Say "Create the plan" when ready to generate the plan file.`,
+    description: "Start a planning session with Planner",
+    agent: "Ssalsyphus"
+  },
+  review: {
+    template: `[PLAN REVIEW REQUESTED]
+
+Plan to review: $ARGUMENTS
+
+Spawning Critic agent to evaluate the plan against quality criteria:
+- Clarity of work content
+- Verification & acceptance criteria
+- Context completeness
+- Big picture & workflow understanding
+
+The Critic will return OKAY or REJECT with specific feedback.`,
+    description: "Review a plan with Critic",
     agent: "Ssalsyphus"
   }
 };
@@ -26690,13 +27108,13 @@ Either:
 1. Continue working on remaining tasks, OR
 2. If you believe you're done, output the completion promise
 
-But be warned: false completion claims will be verified by Oracle.`,
+But be warned: false completion claims will be verified by Architect.`,
   `[RALPH LOOP - SISYPHEAN PERSISTENCE]
 
 The boulder rolls. The work continues. The loop persists.
 
-Check .sisyphus/prd.json for remaining stories.
-Log your progress in .sisyphus/progress.txt.
+Check .omc/prd.json for remaining stories.
+Log your progress in .omc/progress.txt.
 Only the completion promise ends the loop.`
 ];
 var ULTRAWORK_RALPH_MESSAGES = [
@@ -26717,7 +27135,7 @@ This is not a drill. This is ULTRAWORK-RALPH.
 
 Resume work immediately. Fire off multiple agents. Background everything.
 
-The loop does not release you until Oracle-verified completion.`,
+The loop does not release you until Architect-verified completion.`,
   `[ULTRAWORK-RALPH - PERSISTENCE \xD7 INTENSITY]
 
 The most powerful mode will not be denied.
@@ -26764,11 +27182,11 @@ function getContinuationMessage(context) {
 import * as fs from "fs";
 import * as path from "path";
 var STATE_FILENAME = "ralph-state.json";
-function getSisyphusDir(projectDir) {
-  return path.join(projectDir, ".sisyphus");
+function getOmcDir(projectDir) {
+  return path.join(projectDir, ".omc");
 }
 function getStatePath(projectDir) {
-  return path.join(getSisyphusDir(projectDir), STATE_FILENAME);
+  return path.join(getOmcDir(projectDir), STATE_FILENAME);
 }
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
@@ -26793,7 +27211,7 @@ function readRalphState(projectDir) {
   return null;
 }
 function writeRalphState(projectDir, state) {
-  const dir = getSisyphusDir(projectDir);
+  const dir = getOmcDir(projectDir);
   ensureDir(dir);
   const statePath = getStatePath(projectDir);
   try {
@@ -26845,11 +27263,11 @@ function markRalphStateComplete(projectDir, state) {
 import * as fs2 from "fs";
 import * as path2 from "path";
 var PRD_FILENAME = "prd.json";
-function getSisyphusDir2(projectDir) {
-  return path2.join(projectDir, ".sisyphus");
+function getSisyphusDir(projectDir) {
+  return path2.join(projectDir, ".omc");
 }
 function getPrdPath(projectDir) {
-  return path2.join(getSisyphusDir2(projectDir), PRD_FILENAME);
+  return path2.join(getSisyphusDir(projectDir), PRD_FILENAME);
 }
 function ensureDir2(dir) {
   if (!fs2.existsSync(dir)) {
@@ -26874,7 +27292,7 @@ function readPrd(projectDir) {
   return null;
 }
 function writePrd(projectDir, prd) {
-  const dir = getSisyphusDir2(projectDir);
+  const dir = getSisyphusDir(projectDir);
   ensureDir2(dir);
   const prdPath = getPrdPath(projectDir);
   prd.updatedAt = new Date().toISOString();
@@ -26950,8 +27368,8 @@ ${nextStory.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join(`
 ---
 
 When this story is complete:
-1. Update .sisyphus/prd.json to set "passes": true for ${nextStory.id}
-2. Add any learnings to .sisyphus/progress.txt
+1. Update .omc/prd.json to set "passes": true for ${nextStory.id}
+2. Add any learnings to .omc/progress.txt
 3. Move to the next story or output completion promise if all done`;
 }
 
@@ -26959,11 +27377,11 @@ When this story is complete:
 import * as fs3 from "fs";
 import * as path3 from "path";
 var PROGRESS_FILENAME = "progress.txt";
-function getSisyphusDir3(projectDir) {
-  return path3.join(projectDir, ".sisyphus");
+function getSisyphusDir2(projectDir) {
+  return path3.join(projectDir, ".omc");
 }
 function getProgressPath(projectDir) {
-  return path3.join(getSisyphusDir3(projectDir), PROGRESS_FILENAME);
+  return path3.join(getSisyphusDir2(projectDir), PROGRESS_FILENAME);
 }
 function ensureDir3(dir) {
   if (!fs3.existsSync(dir)) {
@@ -26971,7 +27389,7 @@ function ensureDir3(dir) {
   }
 }
 function initializeProgress(projectDir, task) {
-  const dir = getSisyphusDir3(projectDir);
+  const dir = getSisyphusDir2(projectDir);
   ensureDir3(dir);
   const progressPath = getProgressPath(projectDir);
   if (fs3.existsSync(progressPath)) {
@@ -27056,11 +27474,11 @@ var PRD_FILENAME2 = "prd.json";
 function createRalphLoopHook(ctx, options = {}) {
   const maxIterations = options.config?.default_max_iterations ?? 50;
   const isEnabled = options.config?.enabled !== false;
-  const getSisyphusDir4 = () => {
-    return path4.join(ctx.directory, ".sisyphus");
+  const getSisyphusDir3 = () => {
+    return path4.join(ctx.directory, ".omc");
   };
   const getPrdPath2 = () => {
-    return path4.join(getSisyphusDir4(), PRD_FILENAME2);
+    return path4.join(getSisyphusDir3(), PRD_FILENAME2);
   };
   const readPrd2 = () => {
     return readPrd(ctx.directory);
@@ -27240,9 +27658,9 @@ ${prdContext}
 ${progressContext}
 
 **REMINDER**:
-- Check .sisyphus/prd.json for user stories
+- Check .omc/prd.json for user stories
 - Update story "passes" to true when complete
-- Log learnings in .sisyphus/progress.txt
+- Log learnings in .omc/progress.txt
 - Only output the promise tag when ALL stories pass`;
       try {
         await ctx.client.session.prompt({
@@ -27333,11 +27751,11 @@ import * as fs4 from "fs";
 import * as path5 from "path";
 var STATE_FILENAME2 = "ultrawork-state.json";
 var GLOBAL_STATE_DIR = path5.join(process.env.HOME || "", ".opencode");
-function getSisyphusDir4(projectDir) {
-  return path5.join(projectDir, ".sisyphus");
+function getOmcDir2(projectDir) {
+  return path5.join(projectDir, ".omc");
 }
 function getStatePath2(projectDir) {
-  return path5.join(getSisyphusDir4(projectDir), STATE_FILENAME2);
+  return path5.join(getOmcDir2(projectDir), STATE_FILENAME2);
 }
 function getGlobalStatePath() {
   return path5.join(GLOBAL_STATE_DIR, STATE_FILENAME2);
@@ -27365,7 +27783,7 @@ function readUltraworkState(projectDir) {
   return null;
 }
 function writeUltraworkState(projectDir, state, writeGlobal = false) {
-  const localDir = getSisyphusDir4(projectDir);
+  const localDir = getOmcDir2(projectDir);
   ensureDir4(localDir);
   const localPath = getStatePath2(projectDir);
   try {
@@ -27424,16 +27842,16 @@ var PRIORITY_HEADER = "## Priority Context";
 var WORKING_MEMORY_HEADER = "## Working Memory";
 var MANUAL_HEADER = "## MANUAL";
 function getNotepadPath(directory) {
-  return path6.join(directory, ".sisyphus", NOTEPAD_FILENAME);
+  return path6.join(directory, ".omc", NOTEPAD_FILENAME);
 }
 function ensureSisyphusDir(directory) {
-  const sisyphusDir = path6.join(directory, ".sisyphus");
+  const sisyphusDir = path6.join(directory, ".omc");
   if (!fs5.existsSync(sisyphusDir)) {
     try {
       fs5.mkdirSync(sisyphusDir, { recursive: true });
       return true;
     } catch (err) {
-      log(`Failed to create .sisyphus directory`, { error: String(err) });
+      log(`Failed to create .omc directory`, { error: String(err) });
       return false;
     }
   }
@@ -27692,7 +28110,7 @@ ${continuationMessage}
 Original task: ${state.prompt}
 
 **REMINDER**:
-- Check .sisyphus/prd.json for user stories
+- Check .omc/prd.json for user stories
 - Update story "passes" to true when complete
 - Only output <promise>TASK_COMPLETE</promise> when ALL stories pass
 
@@ -27901,8 +28319,8 @@ This mode OVERRIDES default heuristics. Where default mode says "parallelize whe
 
 ### 2. DELEGATE AGGRESSIVELY
 Route tasks to specialists IMMEDIATELY - don't do it yourself:
-- \`oracle\` \u2192 ANY debugging or analysis
-- \`librarian\` \u2192 ANY research or doc lookup
+- \`architect\` \u2192 ANY debugging or analysis
+- \`researcher\` \u2192 ANY research or doc lookup
 - \`explore\` \u2192 ANY search operation
 - \`frontend-engineer\` \u2192 ANY UI work
 - \`document-writer\` \u2192 ANY documentation
@@ -27937,10 +28355,10 @@ Before stopping, VERIFY:
 
 | Domain | LOW (Haiku) | MEDIUM (Sonnet) | HIGH (Opus) |
 |--------|-------------|-----------------|-------------|
-| **Analysis** | oracle-low | oracle-medium | oracle |
+| **Analysis** | architect-low | architect-medium | architect |
 | **Execution** | sisyphus-junior-low | sisyphus-junior | sisyphus-junior-high |
 | **Search** | explore | explore-medium | - |
-| **Research** | librarian-low | librarian | - |
+| **Research** | researcher-low | researcher | - |
 | **Frontend** | frontend-engineer-low | frontend-engineer | frontend-engineer-high |
 | **Docs** | document-writer | - | - |
 | **Planning** | - | - | prometheus, momus, metis |
@@ -27956,9 +28374,9 @@ You have entered the Ralph Loop - an INESCAPABLE development cycle that binds yo
 
 ## PRD-BASED WORKFLOW
 
-If \`.sisyphus/prd.json\` exists:
+If \`.omc/prd.json\` exists:
 1. Read the PRD file to understand all user stories
-2. Read \`.sisyphus/progress.txt\` for learnings
+2. Read \`.omc/progress.txt\` for learnings
 3. Work on highest priority story where \`passes: false\`
 4. Mark \`passes: true\` when story is complete
 5. Update progress.txt with learnings
@@ -28048,8 +28466,8 @@ The \`<promise>TASK_COMPLETE</promise>\` tag binds you to completion. You may ON
 
 ### 2. DELEGATE AGGRESSIVELY
 Route tasks to specialists IMMEDIATELY:
-- \`oracle\` / \`oracle-medium\` \u2192 debugging, analysis, verification
-- \`librarian\` \u2192 research, doc lookup
+- \`architect\` / \`architect-medium\` \u2192 debugging, analysis, verification
+- \`researcher\` \u2192 research, doc lookup
 - \`explore\` \u2192 codebase search
 - \`frontend-engineer\` \u2192 UI work
 - \`sisyphus-junior\` / \`sisyphus-junior-high\` \u2192 code changes

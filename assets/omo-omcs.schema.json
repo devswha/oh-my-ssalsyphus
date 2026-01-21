@@ -60,7 +60,7 @@
         },
         "prd_path": {
           "type": "string",
-          "default": ".sisyphus/prd.json",
+          "default": ".omc/prd.json",
           "description": "Path to PRD file for structured task tracking"
         }
       },

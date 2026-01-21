@@ -142,7 +142,7 @@ ${continuationMessage}
 Original task: ${state.prompt}
 
 **REMINDER**:
-- Check .sisyphus/prd.json for user stories
+- Check .omc/prd.json for user stories
 - Update story "passes" to true when complete
 - Only output <promise>TASK_COMPLETE</promise> when ALL stories pass
 

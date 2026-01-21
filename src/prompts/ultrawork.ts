@@ -26,8 +26,8 @@ This mode OVERRIDES default heuristics. Where default mode says "parallelize whe
 
 ### 2. DELEGATE AGGRESSIVELY
 Route tasks to specialists IMMEDIATELY - don't do it yourself:
-- \`oracle\` → ANY debugging or analysis
-- \`librarian\` → ANY research or doc lookup
+- \`architect\` → ANY debugging or analysis
+- \`researcher\` → ANY research or doc lookup
 - \`explore\` → ANY search operation
 - \`frontend-engineer\` → ANY UI work
 - \`document-writer\` → ANY documentation
@@ -62,10 +62,10 @@ Before stopping, VERIFY:
 
 | Domain | LOW (Haiku) | MEDIUM (Sonnet) | HIGH (Opus) |
 |--------|-------------|-----------------|-------------|
-| **Analysis** | oracle-low | oracle-medium | oracle |
+| **Analysis** | architect-low | architect-medium | architect |
 | **Execution** | sisyphus-junior-low | sisyphus-junior | sisyphus-junior-high |
 | **Search** | explore | explore-medium | - |
-| **Research** | librarian-low | librarian | - |
+| **Research** | researcher-low | researcher | - |
 | **Frontend** | frontend-engineer-low | frontend-engineer | frontend-engineer-high |
 | **Docs** | document-writer | - | - |
 | **Planning** | - | - | prometheus, momus, metis |
@@ -82,9 +82,9 @@ You have entered the Ralph Loop - an INESCAPABLE development cycle that binds yo
 
 ## PRD-BASED WORKFLOW
 
-If \`.sisyphus/prd.json\` exists:
+If \`.omc/prd.json\` exists:
 1. Read the PRD file to understand all user stories
-2. Read \`.sisyphus/progress.txt\` for learnings
+2. Read \`.omc/progress.txt\` for learnings
 3. Work on highest priority story where \`passes: false\`
 4. Mark \`passes: true\` when story is complete
 5. Update progress.txt with learnings
@@ -175,8 +175,8 @@ The \`<promise>TASK_COMPLETE</promise>\` tag binds you to completion. You may ON
 
 ### 2. DELEGATE AGGRESSIVELY
 Route tasks to specialists IMMEDIATELY:
-- \`oracle\` / \`oracle-medium\` → debugging, analysis, verification
-- \`librarian\` → research, doc lookup
+- \`architect\` / \`architect-medium\` → debugging, analysis, verification
+- \`researcher\` → research, doc lookup
 - \`explore\` → codebase search
 - \`frontend-engineer\` → UI work
 - \`sisyphus-junior\` / \`sisyphus-junior-high\` → code changes

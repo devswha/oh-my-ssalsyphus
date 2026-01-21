@@ -92,14 +92,14 @@ Either:
 1. Continue working on remaining tasks, OR
 2. If you believe you're done, output the completion promise
 
-But be warned: false completion claims will be verified by Oracle.`,
+But be warned: false completion claims will be verified by Architect.`,
 
   `[RALPH LOOP - SISYPHEAN PERSISTENCE]
 
 The boulder rolls. The work continues. The loop persists.
 
-Check .sisyphus/prd.json for remaining stories.
-Log your progress in .sisyphus/progress.txt.
+Check .omc/prd.json for remaining stories.
+Log your progress in .omc/progress.txt.
 Only the completion promise ends the loop.`,
 ];
 
@@ -122,7 +122,7 @@ This is not a drill. This is ULTRAWORK-RALPH.
 
 Resume work immediately. Fire off multiple agents. Background everything.
 
-The loop does not release you until Oracle-verified completion.`,
+The loop does not release you until Architect-verified completion.`,
 
   `[ULTRAWORK-RALPH - PERSISTENCE × INTENSITY]
 

@@ -17,12 +17,12 @@ export interface RalphState {
 
 const STATE_FILENAME = "ralph-state.json";
 
-function getSisyphusDir(projectDir: string): string {
-  return path.join(projectDir, ".sisyphus");
+function getOmcDir(projectDir: string): string {
+  return path.join(projectDir, ".omc");
 }
 
 function getStatePath(projectDir: string): string {
-  return path.join(getSisyphusDir(projectDir), STATE_FILENAME);
+  return path.join(getOmcDir(projectDir), STATE_FILENAME);
 }
 
 function ensureDir(dir: string): void {
@@ -52,7 +52,7 @@ export function readRalphState(projectDir: string): RalphState | null {
 }
 
 export function writeRalphState(projectDir: string, state: RalphState): void {
-  const dir = getSisyphusDir(projectDir);
+  const dir = getOmcDir(projectDir);
   ensureDir(dir);
   const statePath = getStatePath(projectDir);
 

@@ -48,13 +48,13 @@ describe("Notepad", () => {
       expect(fs.existsSync(getNotepadPath(TEST_DIR))).toBe(true);
     });
 
-    test("creates .sisyphus directory if missing", () => {
-      const sisyphusDir = path.join(TEST_DIR, ".sisyphus");
-      expect(fs.existsSync(sisyphusDir)).toBe(false);
+    test("creates .omc directory if missing", () => {
+      const omcDir = path.join(TEST_DIR, ".omc");
+      expect(fs.existsSync(omcDir)).toBe(false);
 
       initNotepad(TEST_DIR);
 
-      expect(fs.existsSync(sisyphusDir)).toBe(true);
+      expect(fs.existsSync(omcDir)).toBe(true);
     });
 
     test("returns true if notepad already exists", () => {

@@ -164,6 +164,103 @@ The loop has been cancelled. You are now free.`,
     description: "Cancel active Ralph Loop",
     agent: "Ssalsyphus",
   },
+  "doctor": {
+    template: `[DOCTOR MODE ACTIVATED - DIAGNOSTICS]
+
+Run installation diagnostics for oh-my-ssalsyphus:
+
+1. Check plugin version
+2. Check for legacy hooks
+3. Verify CLAUDE.md configuration
+4. Check for stale state files
+
+Report any issues found and suggest fixes.`,
+    description: "Diagnose and fix oh-my-ssalsyphus installation issues",
+    agent: "Ssalsyphus",
+  },
+  "cancel-ultraqa": {
+    template: `Cancel the currently active UltraQA workflow.
+
+This will:
+- Stop the QA cycling loop
+- Clear the ultraqa state
+- Allow you to work freely
+
+The UltraQA workflow has been cancelled.`,
+    description: "Cancel active UltraQA cycling workflow",
+    agent: "Ssalsyphus",
+  },
+  "ultraqa": {
+    template: `[ULTRAQA ACTIVATED - AUTONOMOUS QA CYCLING]
+
+Goal: $ARGUMENTS
+
+Cycle until the goal is met or max cycles (5) reached.
+
+Cycle workflow:
+1. RUN QA - Execute verification based on goal type
+2. CHECK RESULT - Did the goal pass?
+3. ARCHITECT DIAGNOSIS - If failed, spawn architect agent to analyze
+4. FIX ISSUES - Apply architect's recommendations
+5. REPEAT
+
+Exit conditions:
+- Goal met → Success message
+- Cycle 5 reached → Stop with diagnosis
+- Same failure 3x → Stop with root cause
+
+Begin QA cycling now.`,
+    description: "QA cycling workflow - test, verify, fix, repeat until goal met",
+    agent: "Ssalsyphus",
+  },
+  "ralplan": {
+    template: `[RALPLAN ACTIVATED - ITERATIVE PLANNING]
+
+Task: $ARGUMENTS
+
+Orchestrate three agents in a planning loop:
+1. PLANNER creates the work plan
+2. ARCHITECT answers architectural questions
+3. CRITIC reviews and either OKAY or REJECT
+
+Loop continues until Critic approves (max 5 iterations).
+
+State tracked in .omc/ralplan-state.json
+Plan saved to .omc/plans/{feature-name}.md
+
+Begin planning now.`,
+    description: "Iterative planning with Planner, Architect, and Critic until consensus",
+    agent: "Ssalsyphus",
+  },
+  "plan": {
+    template: `[PLANNING SESSION STARTED]
+
+Task: $ARGUMENTS
+
+Starting strategic planning session. The Planner will:
+1. Interview you about requirements
+2. Research the codebase for context
+3. Create a structured work plan
+
+Say "Create the plan" when ready to generate the plan file.`,
+    description: "Start a planning session with Planner",
+    agent: "Ssalsyphus",
+  },
+  "review": {
+    template: `[PLAN REVIEW REQUESTED]
+
+Plan to review: $ARGUMENTS
+
+Spawning Critic agent to evaluate the plan against quality criteria:
+- Clarity of work content
+- Verification & acceptance criteria
+- Context completeness
+- Big picture & workflow understanding
+
+The Critic will return OKAY or REJECT with specific feedback.`,
+    description: "Review a plan with Critic",
+    agent: "Ssalsyphus",
+  },
 };
 
 // Build Ssalsyphus agent config

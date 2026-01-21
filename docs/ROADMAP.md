@@ -31,14 +31,14 @@
 
 **Problem**: OpenCode plugin API does not expose a `Stop` event hook.
 
-**Impact**: 
-- Cannot block premature stopping like oh-my-claude-sisyphus
+**Impact**:
+- Cannot block premature stopping like oh-my-claudecode
 - Must rely on `session.idle` detection + prompt injection (reactive, not proactive)
 - Different UX: countdown before continuation vs immediate block
 
 **Comparison**:
 ```
-oh-my-claude-sisyphus (Claude Code):
+oh-my-claudecode (Claude Code):
   User stops → Stop hook intercepts → Returns {continue: false} → Blocked immediately
 
 omo-omcs (OpenCode):
@@ -60,31 +60,31 @@ omo-omcs (OpenCode):
 - No cross-session persistence
 - Cannot resume interrupted sessions
 
-**oh-my-claude-sisyphus approach**:
-- `.sisyphus/ultrawork-state.json` - Local project state
-- `.sisyphus/ralph-state.json` - Ralph loop state
-- `~/.claude/ultrawork-state.json` - Global cross-session state
+**oh-my-claudecode approach**:
+- `.omc/ultrawork-state.json` - Local project state
+- `.omc/ralph-state.json` - Ralph loop state
+- `~/.opencode/ultrawork-state.json` - Global cross-session state
 
 ---
 
-### 3. Missing Oracle Verification
+### 3. Missing Architect Verification
 
-**Problem**: Ralph-loop completion is not verified by Oracle agent.
+**Problem**: Ralph-loop completion is not verified by Architect agent.
 
 **Impact**:
 - Agent can claim completion without verification
 - No second opinion on task completion quality
 
-**oh-my-claude-sisyphus approach**:
+**oh-my-claudecode approach**:
 - `ralph-verifier` hook intercepts completion claims
-- Spawns Oracle agent to verify before accepting
+- Spawns Architect agent to verify before accepting
 - Uses `<oracle-approved>VERIFIED_COMPLETE</oracle-approved>` tag
 
 ---
 
 ### 4. Incomplete PRD Progress Tracking
 
-**Problem**: `.sisyphus/progress.txt` not fully implemented.
+**Problem**: `.omc/progress.txt` not fully implemented.
 
 **Impact**:
 - Learnings not persisted between iterations
@@ -99,7 +99,7 @@ omo-omcs (OpenCode):
 
 #### 1.1 File-Based Ultrawork State ✅
 ```typescript
-// Location: .sisyphus/ultrawork-state.json
+// Location: .omc/ultrawork-state.json
 {
   "active": true,
   "started_at": "2025-01-20T13:00:00Z",
@@ -119,7 +119,7 @@ Tasks:
 
 #### 1.2 File-Based Ralph State ✅
 ```typescript
-// Location: .sisyphus/ralph-state.json
+// Location: .omc/ralph-state.json
 {
   "active": true,
   "iteration": 3,
@@ -144,7 +144,7 @@ Tasks:
 
 #### 2.1 Full PRD Structure ✅
 ```typescript
-// Location: .sisyphus/prd.json
+// Location: .omc/prd.json
 {
   "project": "User Authentication",
   "description": "Implement full auth system with JWT",
@@ -179,7 +179,7 @@ Tasks:
 
 #### 2.2 Progress Tracking ✅
 ```
-// Location: .sisyphus/progress.txt
+// Location: .omc/progress.txt
 
 ## Iteration 1 (2025-01-20 13:00)
 Story: US-001 - User registration
@@ -236,7 +236,7 @@ Tasks:
 
 #### 3.2 Verification State ✅
 ```typescript
-// Location: .sisyphus/ralph-verification.json
+// Location: .omc/ralph-verification.json
 {
   "pending": true,
   "original_task": "implement user registration",
@@ -314,9 +314,9 @@ Feature request for OpenCode plugin API:
 
 ---
 
-## Comparison: oh-my-claude-sisyphus vs omo-omcs
+## Comparison: oh-my-claudecode vs omo-omcs
 
-| Feature | oh-my-claude-sisyphus | omo-omcs Current | Status |
+| Feature | oh-my-claudecode | omo-omcs Current | Status |
 |---------|----------------------|------------------|--------|
 | Stop Hook | ✅ Native | ❌ Not available | ⏳ Request from OpenCode |
 | System Prompt Injection | ✅ Bash hooks | ✅ `experimental.chat.system.transform` | ✅ Done |
@@ -326,9 +326,9 @@ Feature request for OpenCode plugin API:
 | File-Based State | ✅ | ✅ Full | ✅ Done (Phase 1) |
 | PRD Support | ✅ Full | ✅ Full | ✅ Done (Phase 2) |
 | Progress Tracking | ✅ | ✅ | ✅ Done (Phase 2) |
-| Oracle Verification | ✅ | ✅ | ✅ Done (Phase 3) |
+| Architect Verification | ✅ | ✅ | ✅ Done (Phase 3) |
 | Continuation Messages | ✅ Varied | ✅ Varied | ✅ Done (Phase 4) |
-| Cross-Session State | ✅ ~/.claude/ | ✅ ~/.opencode/ | ✅ Done (Phase 1) |
+| Cross-Session State | ✅ ~/.opencode/ | ✅ ~/.opencode/ | ✅ Done (Phase 1) |
 | Notepad Memory | ✅ | ✅ | ✅ Done |
 | Remember Tags | ✅ | ✅ | ✅ Done |
 | Mnemosyne Skills | ✅ | ❌ | ⏳ Future |

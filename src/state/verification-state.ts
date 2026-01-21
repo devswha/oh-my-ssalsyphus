@@ -15,12 +15,12 @@ export interface VerificationState {
 
 const STATE_FILENAME = "ralph-verification.json";
 
-function getSisyphusDir(projectDir: string): string {
-  return path.join(projectDir, ".sisyphus");
+function getOmcDir(projectDir: string): string {
+  return path.join(projectDir, ".omc");
 }
 
 function getStatePath(projectDir: string): string {
-  return path.join(getSisyphusDir(projectDir), STATE_FILENAME);
+  return path.join(getOmcDir(projectDir), STATE_FILENAME);
 }
 
 function ensureDir(dir: string): void {
@@ -50,7 +50,7 @@ export function readVerificationState(projectDir: string): VerificationState | n
 }
 
 export function writeVerificationState(projectDir: string, state: VerificationState): void {
-  const dir = getSisyphusDir(projectDir);
+  const dir = getOmcDir(projectDir);
   ensureDir(dir);
   const statePath = getStatePath(projectDir);
 

@@ -7,13 +7,13 @@ const REMINDER_MESSAGE = `
 
 You called a search/fetch tool directly without leveraging specialized agents.
 
-RECOMMENDED: Use background_task with explore/librarian agents for better results:
+RECOMMENDED: Use background_task with explore/researcher agents for better results:
 
 \`\`\`
 // Parallel exploration - fire multiple agents simultaneously
 background_task(agent="explore", prompt="Find all files matching pattern X")
-background_task(agent="explore", prompt="Search for implementation of Y") 
-background_task(agent="librarian", prompt="Lookup documentation for Z")
+background_task(agent="explore", prompt="Search for implementation of Y")
+background_task(agent="researcher", prompt="Lookup documentation for Z")
 
 // Then continue your work while they run in background
 // System will notify you when each completes
