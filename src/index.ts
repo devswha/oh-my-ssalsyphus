@@ -8,6 +8,7 @@ import { createRalphLoopHook } from "./hooks/ralph-loop";
 import { createPersistentModeHook, checkPersistentModes } from "./hooks/persistent-mode";
 import { createSystemPromptInjector, type ActiveMode } from "./hooks/system-prompt-injector";
 import { createRememberTagProcessor } from "./hooks/remember-tag-processor";
+import { createSkillInjector } from "./hooks/skill-injector";
 import { log } from "./shared/logger";
 
 const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
@@ -20,6 +21,9 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
 
   // Create system prompt injector for mode tracking
   const systemPromptInjector = createSystemPromptInjector(ctx);
+
+  // Create skill injector instance
+  const skillInjector = createSkillInjector(ctx);
 
   // Create ralph loop hook with mode change callback
   const ralphLoop = createRalphLoopHook(ctx, {
@@ -108,6 +112,15 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
           sessionID: input.sessionID,
         });
         ralphLoop.cancelLoop(input.sessionID);
+      }
+
+      // Detect and inject skills based on context
+      const skillInjection = skillInjector.detectAndInject(input.sessionID, promptText);
+      if (skillInjection.skill) {
+        systemPromptInjector.setSkillInjection(input.sessionID, skillInjection);
+      } else {
+        // Clear skill injection when no context detected (prevents persistence bug)
+        systemPromptInjector.clearSkillInjection(input.sessionID);
       }
     },
     "experimental.chat.system.transform": systemPromptInjector["experimental.chat.system.transform"],

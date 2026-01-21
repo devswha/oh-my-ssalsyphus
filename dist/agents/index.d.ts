@@ -86,6 +86,10 @@ export declare const writerAgent: AgentDefinition;
  */
 export declare const qaTesterAgent: AgentDefinition;
 /**
+ * QA Tester High (Opus) - Comprehensive Production QA Specialist
+ */
+export declare const qaTesterHighAgent: AgentDefinition;
+/**
  * Planner (Opus) - Strategic Planning Specialist
  */
 export declare const plannerAgent: AgentDefinition;
@@ -101,6 +105,10 @@ export declare const criticAgent: AgentDefinition;
  * Vision (Sonnet) - Visual/Media Analysis Specialist
  */
 export declare const visionAgent: AgentDefinition;
+/**
+ * Coordinator (Opus) - Master Orchestrator for complex multi-step tasks
+ */
+export declare const coordinatorAgent: AgentDefinition;
 export declare const agents: Record<string, AgentDefinition>;
 export declare function getAgent(name: string): AgentDefinition | undefined;
 export declare function listAgents(): AgentDefinition[];

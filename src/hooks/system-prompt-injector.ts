@@ -5,6 +5,7 @@ import {
   RALPH_LOOP_SYSTEM_PROMPT,
   ULTRAWORK_RALPH_SYSTEM_PROMPT,
 } from "../prompts/ultrawork";
+import type { SkillInjection } from "./skill-injector";
 
 export type ActiveMode = "ultrawork" | "ralph-loop" | "ultrawork-ralph" | null;
 
@@ -16,6 +17,7 @@ interface ModeState {
 }
 
 const sessionModes = new Map<string, ModeState>();
+const sessionSkills = new Map<string, SkillInjection>();
 
 export function createSystemPromptInjector(_ctx: PluginInput) {
   const setMode = (sessionID: string, mode: ActiveMode, task?: string): void => {
@@ -41,6 +43,21 @@ export function createSystemPromptInjector(_ctx: PluginInput) {
     sessionModes.delete(sessionID);
   };
 
+  const setSkillInjection = (sessionID: string, injection: SkillInjection): void => {
+    if (injection.skill) {
+      sessionSkills.set(sessionID, injection);
+      log(`Skill injection set`, { sessionID, skill: injection.skill });
+    }
+  };
+
+  const getSkillInjection = (sessionID: string): SkillInjection | undefined => {
+    return sessionSkills.get(sessionID);
+  };
+
+  const clearSkillInjection = (sessionID: string): void => {
+    sessionSkills.delete(sessionID);
+  };
+
   const getSystemPromptForMode = (mode: ActiveMode): string | null => {
     switch (mode) {
       case "ultrawork":
@@ -58,13 +75,21 @@ export function createSystemPromptInjector(_ctx: PluginInput) {
     input: { sessionID: string },
     output: { system: string[] }
   ): Promise<void> => {
+    // Inject mode prompts
     const state = sessionModes.get(input.sessionID);
-    if (!state?.mode) return;
+    if (state?.mode) {
+      const systemPrompt = getSystemPromptForMode(state.mode);
+      if (systemPrompt) {
+        output.system.push(systemPrompt);
+        log(`Injected system prompt`, { sessionID: input.sessionID, mode: state.mode });
+      }
+    }
 
-    const systemPrompt = getSystemPromptForMode(state.mode);
-    if (systemPrompt) {
-      output.system.push(systemPrompt);
-      log(`Injected system prompt`, { sessionID: input.sessionID, mode: state.mode });
+    // Inject skill prompts
+    const skillInjection = sessionSkills.get(input.sessionID);
+    if (skillInjection?.prompt) {
+      output.system.push(skillInjection.prompt);
+      log(`Injected skill prompt`, { sessionID: input.sessionID, skill: skillInjection.skill });
     }
   };
 
@@ -73,6 +98,9 @@ export function createSystemPromptInjector(_ctx: PluginInput) {
     getMode,
     clearMode,
     getSystemPromptForMode,
+    setSkillInjection,
+    getSkillInjection,
+    clearSkillInjection,
     "experimental.chat.system.transform": systemTransformHook,
   };
 }

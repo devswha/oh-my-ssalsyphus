@@ -9,6 +9,8 @@ export { getContinuationMessage, getProgressSummary, getToastMessage } from "./c
 export type { ContinuationContext } from "./continuation-messages";
 export type { ActiveMode } from "./system-prompt-injector";
 export type { PRD, UserStory } from "./ralph-loop";
+export { createSkillInjector } from "./skill-injector";
+export type { SkillInjection } from "./skill-injector";
 export { initNotepad, readNotepad, getNotepadPath, getPriorityContext, getWorkingMemory, getManualSection, setPriorityContext, addWorkingMemoryEntry, addManualEntry, pruneOldEntries, getNotepadStats, formatNotepadContext, formatFullNotepad, processRememberTags, NOTEPAD_FILENAME, PRIORITY_HEADER, WORKING_MEMORY_HEADER, MANUAL_HEADER, DEFAULT_CONFIG as NOTEPAD_DEFAULT_CONFIG, } from "./notepad";
 export type { NotepadConfig, NotepadStats, PriorityContextResult, PruneResult, } from "./notepad";
 export { createPersistentModeHook, checkPersistentModes, resetTodoContinuationAttempts, } from "./persistent-mode";

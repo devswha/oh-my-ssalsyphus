@@ -1,4 +1,5 @@
 import type { PluginInput } from "@opencode-ai/plugin";
+import type { SkillInjection } from "./skill-injector";
 export type ActiveMode = "ultrawork" | "ralph-loop" | "ultrawork-ralph" | null;
 interface ModeState {
     mode: ActiveMode;
@@ -11,6 +12,9 @@ export declare function createSystemPromptInjector(_ctx: PluginInput): {
     getMode: (sessionID: string) => ModeState | undefined;
     clearMode: (sessionID: string) => void;
     getSystemPromptForMode: (mode: ActiveMode) => string | null;
+    setSkillInjection: (sessionID: string, injection: SkillInjection) => void;
+    getSkillInjection: (sessionID: string) => SkillInjection | undefined;
+    clearSkillInjection: (sessionID: string) => void;
     "experimental.chat.system.transform": (input: {
         sessionID: string;
     }, output: {

@@ -9,6 +9,8 @@ export { getContinuationMessage, getProgressSummary, getToastMessage } from "./c
 export type { ContinuationContext } from "./continuation-messages";
 export type { ActiveMode } from "./system-prompt-injector";
 export type { PRD, UserStory } from "./ralph-loop";
+export { createSkillInjector } from "./skill-injector";
+export type { SkillInjection } from "./skill-injector";
 
 // Notepad - Compaction Resilient Memory
 export {
