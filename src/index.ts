@@ -69,7 +69,8 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
 
   const editErrorRecovery = createEditErrorRecoveryHook(ctx, {
     enabled: pluginConfig.edit_error_recovery?.enabled ?? true,
-    maxRetries: pluginConfig.edit_error_recovery?.maxRetries,
+    maxRetries: pluginConfig.edit_error_recovery?.maxRetries ?? 3,
+    showToasts: pluginConfig.edit_error_recovery?.showToasts ?? true,
   });
 
   const omcOrchestrator = createOmcOrchestratorHook(ctx, {
@@ -77,12 +78,13 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
     auditLogEnabled: pluginConfig.orchestrator?.auditLogEnabled ?? true,
   });
 
-  // Create TUI status hook for agent visibility notifications
+  // Create TUI status hook for agent visibility notifications and metrics
   const tuiStatus = createTuiStatusHook(ctx, {
     enabled: pluginConfig.tui_status?.enabled ?? true,
     showAgentNotifications: pluginConfig.tui_status?.showAgentNotifications ?? true,
     showModeChanges: pluginConfig.tui_status?.showModeChanges ?? true,
     toastDuration: pluginConfig.tui_status?.toastDuration ?? 3000,
+    trackMetrics: pluginConfig.tui_status?.trackMetrics ?? true,
   });
 
   // Create config handler for agent/command registration

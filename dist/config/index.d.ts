@@ -52,7 +52,16 @@ declare const ContextRecoveryConfigSchema: z.ZodObject<{
 declare const EditErrorRecoveryConfigSchema: z.ZodObject<{
     enabled: z.ZodOptional<z.ZodBoolean>;
     maxRetries: z.ZodOptional<z.ZodNumber>;
+    showToasts: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
+declare const TuiStatusConfigSchema: z.ZodObject<{
+    enabled: z.ZodOptional<z.ZodBoolean>;
+    showAgentNotifications: z.ZodOptional<z.ZodBoolean>;
+    showModeChanges: z.ZodOptional<z.ZodBoolean>;
+    toastDuration: z.ZodOptional<z.ZodNumber>;
+    trackMetrics: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strip>;
+export type TuiStatusConfig = z.infer<typeof TuiStatusConfigSchema>;
 declare const OmoOmcsConfigSchema: z.ZodObject<{
     $schema: z.ZodOptional<z.ZodString>;
     agents: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodObject<{
@@ -112,12 +121,14 @@ declare const OmoOmcsConfigSchema: z.ZodObject<{
     edit_error_recovery: z.ZodOptional<z.ZodObject<{
         enabled: z.ZodOptional<z.ZodBoolean>;
         maxRetries: z.ZodOptional<z.ZodNumber>;
+        showToasts: z.ZodOptional<z.ZodBoolean>;
     }, z.core.$strip>>;
     tui_status: z.ZodOptional<z.ZodObject<{
         enabled: z.ZodOptional<z.ZodBoolean>;
         showAgentNotifications: z.ZodOptional<z.ZodBoolean>;
         showModeChanges: z.ZodOptional<z.ZodBoolean>;
         toastDuration: z.ZodOptional<z.ZodNumber>;
+        trackMetrics: z.ZodOptional<z.ZodBoolean>;
     }, z.core.$strip>>;
     sisyphus_agent: z.ZodOptional<z.ZodObject<{
         disabled: z.ZodOptional<z.ZodBoolean>;

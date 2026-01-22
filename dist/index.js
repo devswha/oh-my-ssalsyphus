@@ -13588,13 +13588,15 @@ var ContextRecoveryConfigSchema = exports_external.object({
 });
 var EditErrorRecoveryConfigSchema = exports_external.object({
   enabled: exports_external.boolean().optional(),
-  maxRetries: exports_external.number().min(1).max(10).optional()
+  maxRetries: exports_external.number().min(1).max(10).optional(),
+  showToasts: exports_external.boolean().optional()
 });
 var TuiStatusConfigSchema = exports_external.object({
   enabled: exports_external.boolean().optional(),
   showAgentNotifications: exports_external.boolean().optional(),
   showModeChanges: exports_external.boolean().optional(),
-  toastDuration: exports_external.number().min(500).max(30000).optional()
+  toastDuration: exports_external.number().min(500).max(30000).optional(),
+  trackMetrics: exports_external.boolean().optional()
 });
 var OmoOmcsConfigSchema = exports_external.object({
   $schema: exports_external.string().optional(),
@@ -30224,57 +30226,207 @@ var EDIT_ERROR_PATTERNS = [
   /cannot.*edit/i,
   /edit.*failed/i
 ];
-var sessionErrors = new Map;
-function createEditErrorRecoveryHook(_ctx, options = {}) {
-  const { enabled = true, maxRetries = 3 } = options;
-  function getErrorState(sessionId) {
-    if (!sessionErrors.has(sessionId)) {
-      sessionErrors.set(sessionId, { consecutiveErrors: 0 });
+var READ_ERROR_PATTERNS = [
+  /ENOENT/i,
+  /file.*not.*found/i,
+  /permission.*denied/i,
+  /cannot.*read/i
+];
+var BASH_ERROR_PATTERNS = [
+  /ETIMEDOUT/i,
+  /ECONNREFUSED/i,
+  /rate.*limit/i,
+  /429/i,
+  /503/i,
+  /502/i
+];
+var RETRY_CONFIG = {
+  string_not_found: { maxRetries: 2, backoffMs: [500, 1000] },
+  file_not_found: { maxRetries: 1, backoffMs: [1000] },
+  permission_denied: { maxRetries: 0, backoffMs: [] },
+  timeout: { maxRetries: 3, backoffMs: [1000, 2000, 4000] },
+  rate_limit: { maxRetries: 3, backoffMs: [2000, 5000, 1e4] },
+  connection_error: { maxRetries: 2, backoffMs: [1000, 3000] },
+  unknown: { maxRetries: 1, backoffMs: [1000] }
+};
+var sessionTracking = new Map;
+function createEditErrorRecoveryHook(ctx, options = {}) {
+  const { enabled = true, maxRetries = 3, showToasts = true } = options;
+  function getSessionTracking(sessionId) {
+    if (!sessionTracking.has(sessionId)) {
+      sessionTracking.set(sessionId, {
+        errors: new Map,
+        totalErrors: 0,
+        lastErrorTime: 0
+      });
     }
-    return sessionErrors.get(sessionId);
+    return sessionTracking.get(sessionId);
   }
-  function clearErrorState(sessionId) {
-    sessionErrors.delete(sessionId);
+  function classifyError(tool3, errorOutput) {
+    if (tool3 === "Edit" || tool3 === "edit") {
+      if (/old_string.*not.*found/i.test(errorOutput))
+        return "string_not_found";
+      if (/file.*not.*found/i.test(errorOutput) || /ENOENT/i.test(errorOutput))
+        return "file_not_found";
+      if (/permission/i.test(errorOutput))
+        return "permission_denied";
+    }
+    if (tool3 === "Read" || tool3 === "read") {
+      if (/ENOENT/i.test(errorOutput) || /file.*not.*found/i.test(errorOutput))
+        return "file_not_found";
+      if (/permission/i.test(errorOutput))
+        return "permission_denied";
+    }
+    if (tool3 === "Bash" || tool3 === "bash") {
+      if (/ETIMEDOUT/i.test(errorOutput))
+        return "timeout";
+      if (/rate.*limit/i.test(errorOutput) || /429/i.test(errorOutput))
+        return "rate_limit";
+      if (/ECONNREFUSED/i.test(errorOutput) || /502|503/i.test(errorOutput))
+        return "connection_error";
+    }
+    return "unknown";
+  }
+  function isRecoverableError(tool3, errorOutput) {
+    if (tool3 === "Edit" || tool3 === "edit") {
+      return EDIT_ERROR_PATTERNS.some((p) => p.test(errorOutput));
+    }
+    if (tool3 === "Read" || tool3 === "read") {
+      return READ_ERROR_PATTERNS.some((p) => p.test(errorOutput));
+    }
+    if (tool3 === "Bash" || tool3 === "bash") {
+      return BASH_ERROR_PATTERNS.some((p) => p.test(errorOutput));
+    }
+    return false;
+  }
+  function getErrorKey(tool3, filePath) {
+    return `${tool3}:${filePath || "unknown"}`;
+  }
+  async function showToast(title, message, variant) {
+    if (!showToasts)
+      return;
+    try {
+      await ctx.client.tui.showToast({
+        body: { title, message, variant, duration: 3000 }
+      });
+    } catch {}
+  }
+  function getRecoveryHint(errorType, tool3, file3) {
+    const hints = {
+      string_not_found: `Re-read ${file3 || "the file"} to get current content before editing`,
+      file_not_found: `Verify the file path exists: ${file3 || "unknown"}`,
+      permission_denied: `Check file permissions for: ${file3 || "unknown"}`,
+      timeout: "Consider increasing timeout or breaking into smaller operations",
+      rate_limit: "Wait before retrying - rate limit hit",
+      connection_error: "Check network connectivity",
+      unknown: `Review the error for ${tool3} operation`
+    };
+    return hints[errorType];
+  }
+  function getErrorStats(sessionId) {
+    const tracking = getSessionTracking(sessionId);
+    const errorsByType = {};
+    const recentErrors = [];
+    for (const error92 of tracking.errors.values()) {
+      errorsByType[error92.lastErrorType] = (errorsByType[error92.lastErrorType] || 0) + 1;
+      if (Date.now() - error92.lastErrorTime < 60000) {
+        recentErrors.push(error92);
+      }
+    }
+    return {
+      totalErrors: tracking.totalErrors,
+      errorsByType,
+      recentErrors
+    };
+  }
+  function clearErrorState(sessionId, key) {
+    const tracking = getSessionTracking(sessionId);
+    if (key) {
+      tracking.errors.delete(key);
+    } else {
+      tracking.errors.clear();
+      tracking.totalErrors = 0;
+    }
   }
   return {
+    getErrorStats,
+    clearErrorState,
     "tool.execute.after": async (input, output) => {
       if (!enabled)
         return;
-      if (input.tool !== "Edit" && input.tool !== "edit")
+      const tool3 = input.tool;
+      const errorOutput = output.output || "";
+      const metadata = output.metadata;
+      const filePath = metadata?.file_path;
+      if (!isRecoverableError(tool3, errorOutput)) {
+        const key2 = getErrorKey(tool3, filePath);
+        const tracking2 = getSessionTracking(input.sessionID);
+        if (tracking2.errors.has(key2)) {
+          const state2 = tracking2.errors.get(key2);
+          if (state2.consecutiveErrors > 0) {
+            log("[error-recovery] Operation succeeded after errors, clearing state", {
+              sessionID: input.sessionID,
+              tool: tool3,
+              file: filePath,
+              previousErrors: state2.consecutiveErrors
+            });
+            tracking2.errors.delete(key2);
+          }
+        }
         return;
-      const errorStr = output.output || "";
-      const isEditError = EDIT_ERROR_PATTERNS.some((pattern) => pattern.test(errorStr));
-      const state = getErrorState(input.sessionID);
-      if (isEditError) {
-        state.consecutiveErrors++;
-        state.lastErrorFile = output.metadata?.file_path;
-        if (/old_string.*not.*found/i.test(errorStr)) {
-          state.lastErrorType = "string_not_found";
-        } else if (/file.*not.*found/i.test(errorStr)) {
-          state.lastErrorType = "file_not_found";
-        } else if (/permission/i.test(errorStr)) {
-          state.lastErrorType = "permission_denied";
-        } else {
-          state.lastErrorType = "unknown";
-        }
-        log("[edit-error-recovery] Edit error detected", {
+      }
+      const errorType = classifyError(tool3, errorOutput);
+      const key = getErrorKey(tool3, filePath);
+      const tracking = getSessionTracking(input.sessionID);
+      const retryConfig = RETRY_CONFIG[errorType];
+      let state = tracking.errors.get(key);
+      if (!state) {
+        state = {
+          tool: tool3,
+          consecutiveErrors: 0,
+          lastErrorType: errorType,
+          lastErrorTime: Date.now(),
+          retryCount: 0
+        };
+        tracking.errors.set(key, state);
+      }
+      state.consecutiveErrors++;
+      state.lastErrorFile = filePath;
+      state.lastErrorType = errorType;
+      state.lastErrorTime = Date.now();
+      tracking.totalErrors++;
+      tracking.lastErrorTime = Date.now();
+      log("[error-recovery] Error detected", {
+        sessionID: input.sessionID,
+        tool: tool3,
+        file: filePath,
+        errorType,
+        consecutiveErrors: state.consecutiveErrors,
+        retryCount: state.retryCount,
+        maxRetries: Math.min(retryConfig.maxRetries, maxRetries)
+      });
+      const effectiveMaxRetries = Math.min(retryConfig.maxRetries, maxRetries);
+      const canRetry = state.retryCount < effectiveMaxRetries;
+      if (canRetry) {
+        state.retryCount++;
+        const backoffMs = retryConfig.backoffMs[state.retryCount - 1] || retryConfig.backoffMs[retryConfig.backoffMs.length - 1] || 1000;
+        log("[error-recovery] Preparing retry", {
           sessionID: input.sessionID,
-          consecutiveErrors: state.consecutiveErrors,
-          errorType: state.lastErrorType,
-          file: state.lastErrorFile
+          retryAttempt: state.retryCount,
+          backoffMs,
+          hint: getRecoveryHint(errorType, tool3, filePath)
         });
-        if (state.consecutiveErrors >= maxRetries) {
-          log("[edit-error-recovery] Max retries reached, suggesting alternative approach", {
-            sessionID: input.sessionID
-          });
-        }
+        await showToast("\uD83D\uDD04 Auto-Retry", `${tool3}: ${errorType.replace(/_/g, " ")} - retrying (${state.retryCount}/${effectiveMaxRetries})`, "warning");
       } else {
-        if (state.consecutiveErrors > 0) {
-          log("[edit-error-recovery] Edit succeeded after errors, clearing state", {
-            sessionID: input.sessionID
-          });
-          clearErrorState(input.sessionID);
-        }
+        log("[error-recovery] Max retries reached", {
+          sessionID: input.sessionID,
+          tool: tool3,
+          file: filePath,
+          errorType,
+          totalAttempts: state.retryCount + 1
+        });
+        await showToast("\u274C Recovery Failed", `${tool3}: ${getRecoveryHint(errorType, tool3, filePath)}`, "error");
+        state.retryCount = 0;
       }
     }
   };
@@ -30380,13 +30532,104 @@ function createOmcOrchestratorHook(ctx, options = {}) {
 
 // src/hooks/tui-status.ts
 var activeAgents = new Map;
+var sessionMetrics = {
+  sessionStartTime: Date.now(),
+  totalAgentCalls: 0,
+  totalSuccesses: 0,
+  totalFailures: 0,
+  agentMetrics: new Map
+};
 function createTuiStatusHook(ctx, options = {}) {
   const {
     enabled = true,
     showAgentNotifications = true,
     showModeChanges = true,
-    toastDuration = 3000
+    toastDuration = 3000,
+    trackMetrics = true
   } = options;
+  function updateMetrics(agentName, durationMs, success3) {
+    if (!trackMetrics)
+      return;
+    sessionMetrics.totalAgentCalls++;
+    if (success3) {
+      sessionMetrics.totalSuccesses++;
+    } else {
+      sessionMetrics.totalFailures++;
+    }
+    let metrics = sessionMetrics.agentMetrics.get(agentName);
+    if (!metrics) {
+      metrics = {
+        totalCalls: 0,
+        successCount: 0,
+        failureCount: 0,
+        totalDurationMs: 0,
+        avgDurationMs: 0,
+        minDurationMs: Infinity,
+        maxDurationMs: 0,
+        lastCallTime: 0
+      };
+      sessionMetrics.agentMetrics.set(agentName, metrics);
+    }
+    metrics.totalCalls++;
+    if (success3) {
+      metrics.successCount++;
+    } else {
+      metrics.failureCount++;
+    }
+    metrics.totalDurationMs += durationMs;
+    metrics.avgDurationMs = metrics.totalDurationMs / metrics.totalCalls;
+    metrics.minDurationMs = Math.min(metrics.minDurationMs, durationMs);
+    metrics.maxDurationMs = Math.max(metrics.maxDurationMs, durationMs);
+    metrics.lastCallTime = Date.now();
+    log("[tui-status] Metrics updated", {
+      agent: agentName,
+      durationMs,
+      success: success3,
+      totalCalls: metrics.totalCalls,
+      avgDurationMs: metrics.avgDurationMs.toFixed(0)
+    });
+  }
+  function getMetricsSummary() {
+    const sessionDuration = ((Date.now() - sessionMetrics.sessionStartTime) / 1000).toFixed(0);
+    const lines = [
+      `\uD83D\uDCCA Session Metrics (${sessionDuration}s)`,
+      `Total: ${sessionMetrics.totalAgentCalls} calls | \u2705 ${sessionMetrics.totalSuccesses} | \u274C ${sessionMetrics.totalFailures}`,
+      ""
+    ];
+    if (sessionMetrics.agentMetrics.size > 0) {
+      lines.push("Per-Agent Stats:");
+      for (const [name, m] of sessionMetrics.agentMetrics.entries()) {
+        const avgSec = (m.avgDurationMs / 1000).toFixed(1);
+        const minSec = m.minDurationMs === Infinity ? "0" : (m.minDurationMs / 1000).toFixed(1);
+        const maxSec = (m.maxDurationMs / 1000).toFixed(1);
+        lines.push(`  ${getAgentEmoji(name)} ${name}: ${m.totalCalls}x | avg ${avgSec}s | ${minSec}-${maxSec}s`);
+      }
+    }
+    return lines.join(`
+`);
+  }
+  function getMetrics() {
+    const agents2 = {};
+    for (const [name, metrics] of sessionMetrics.agentMetrics.entries()) {
+      agents2[name] = { ...metrics };
+    }
+    return {
+      session: {
+        sessionStartTime: sessionMetrics.sessionStartTime,
+        totalAgentCalls: sessionMetrics.totalAgentCalls,
+        totalSuccesses: sessionMetrics.totalSuccesses,
+        totalFailures: sessionMetrics.totalFailures
+      },
+      agents: agents2
+    };
+  }
+  function resetMetrics() {
+    sessionMetrics.sessionStartTime = Date.now();
+    sessionMetrics.totalAgentCalls = 0;
+    sessionMetrics.totalSuccesses = 0;
+    sessionMetrics.totalFailures = 0;
+    sessionMetrics.agentMetrics.clear();
+  }
   async function showToast(opts) {
     if (!enabled)
       return;
@@ -30403,13 +30646,16 @@ function createTuiStatusHook(ctx, options = {}) {
       log("[tui-status] Failed to show toast", { error: error92 });
     }
   }
-  async function notifyAgentStarted(agentName, task) {
+  async function notifyAgentStarted(agentName, task, callID) {
     if (!showAgentNotifications)
       return;
-    activeAgents.set(agentName, {
+    const key = callID || agentName;
+    activeAgents.set(key, {
       name: agentName,
       status: "running",
-      startTime: Date.now()
+      startTime: Date.now(),
+      task,
+      callID
     });
     const emoji5 = getAgentEmoji(agentName);
     const shortTask = task ? `: ${task.substring(0, 40)}${task.length > 40 ? "..." : ""}` : "";
@@ -30420,21 +30666,24 @@ function createTuiStatusHook(ctx, options = {}) {
       duration: 2000
     });
   }
-  async function notifyAgentCompleted(agentName, success3 = true) {
+  async function notifyAgentCompleted(agentName, success3 = true, callID) {
     if (!showAgentNotifications)
       return;
-    const agent = activeAgents.get(agentName);
+    const key = callID || agentName;
+    const agent = activeAgents.get(key);
     if (agent) {
       agent.status = success3 ? "completed" : "failed";
       agent.endTime = Date.now();
-      const duration5 = ((agent.endTime - agent.startTime) / 1000).toFixed(1);
+      const durationMs = agent.endTime - agent.startTime;
+      const durationSec = (durationMs / 1000).toFixed(1);
+      updateMetrics(agent.name, durationMs, success3);
       await showToast({
         title: success3 ? "\u2705 Agent Completed" : "\u274C Agent Failed",
-        message: `${agentName} (${duration5}s)`,
+        message: `${agent.name} (${durationSec}s)`,
         variant: success3 ? "success" : "error",
         duration: 2000
       });
-      setTimeout(() => activeAgents.delete(agentName), 5000);
+      setTimeout(() => activeAgents.delete(key), 5000);
     }
   }
   async function notifyModeChange(mode, active) {
@@ -30492,6 +30741,9 @@ function createTuiStatusHook(ctx, options = {}) {
     notifyPhaseChange,
     notifyIteration,
     getActiveAgents,
+    getMetrics,
+    getMetricsSummary,
+    resetMetrics,
     "tool.execute.before": async (input, output) => {
       if (!enabled || !showAgentNotifications)
         return;
@@ -30502,9 +30754,10 @@ function createTuiStatusHook(ctx, options = {}) {
           const agentName = subagentType.includes(":") ? subagentType.split(":").pop() || subagentType : subagentType;
           const taskSummary = prompt?.split(`
 `)[0]?.substring(0, 50);
-          await notifyAgentStarted(agentName, taskSummary);
+          await notifyAgentStarted(agentName, taskSummary, input.callID);
           log("[tui-status] Agent spawned", {
             sessionID: input.sessionID,
+            callID: input.callID,
             agent: agentName,
             task: taskSummary
           });
@@ -30515,11 +30768,17 @@ function createTuiStatusHook(ctx, options = {}) {
       if (!enabled || !showAgentNotifications)
         return;
       if (input.tool === "Task" || input.tool === "task") {
-        const metadata = output.metadata;
-        const agentName = metadata?.agent_name;
-        const success3 = !output.output?.toLowerCase().includes("error") && !output.output?.toLowerCase().includes("failed");
-        if (agentName) {
-          await notifyAgentCompleted(agentName, success3);
+        const agentByCallID = activeAgents.get(input.callID);
+        if (agentByCallID) {
+          const success3 = !output.output?.toLowerCase().includes("error") && !output.output?.toLowerCase().includes("failed");
+          await notifyAgentCompleted(agentByCallID.name, success3, input.callID);
+        } else {
+          const metadata = output.metadata;
+          const agentName = metadata?.agent_name;
+          if (agentName) {
+            const success3 = !output.output?.toLowerCase().includes("error") && !output.output?.toLowerCase().includes("failed");
+            await notifyAgentCompleted(agentName, success3);
+          }
         }
       }
     }
@@ -30594,7 +30853,8 @@ var OmoOmcsPlugin = async (ctx) => {
   });
   const editErrorRecovery = createEditErrorRecoveryHook(ctx, {
     enabled: pluginConfig.edit_error_recovery?.enabled ?? true,
-    maxRetries: pluginConfig.edit_error_recovery?.maxRetries
+    maxRetries: pluginConfig.edit_error_recovery?.maxRetries ?? 3,
+    showToasts: pluginConfig.edit_error_recovery?.showToasts ?? true
   });
   const omcOrchestrator = createOmcOrchestratorHook(ctx, {
     delegationEnforcement: pluginConfig.orchestrator?.delegationEnforcement ?? "warn",
@@ -30604,7 +30864,8 @@ var OmoOmcsPlugin = async (ctx) => {
     enabled: pluginConfig.tui_status?.enabled ?? true,
     showAgentNotifications: pluginConfig.tui_status?.showAgentNotifications ?? true,
     showModeChanges: pluginConfig.tui_status?.showModeChanges ?? true,
-    toastDuration: pluginConfig.tui_status?.toastDuration ?? 3000
+    toastDuration: pluginConfig.tui_status?.toastDuration ?? 3000,
+    trackMetrics: pluginConfig.tui_status?.trackMetrics ?? true
   });
   const configHandler = createConfigHandler({
     ctx,

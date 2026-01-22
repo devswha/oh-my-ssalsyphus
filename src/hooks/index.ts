@@ -65,5 +65,5 @@ export { createContextRecoveryHook, type ContextRecoveryOptions } from "./contex
 export { createEditErrorRecoveryHook, type EditErrorRecoveryOptions } from "./edit-error-recovery";
 export { createOmcOrchestratorHook, type OmcOrchestratorOptions } from "./omc-orchestrator";
 
-// TUI Status - Agent visibility notifications
+// TUI Status - Agent visibility notifications and metrics
 export { createTuiStatusHook, type TuiStatusOptions } from "./tui-status";

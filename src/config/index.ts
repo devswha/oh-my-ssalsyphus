@@ -52,6 +52,7 @@ const ContextRecoveryConfigSchema = z.object({
 const EditErrorRecoveryConfigSchema = z.object({
   enabled: z.boolean().optional(),
   maxRetries: z.number().min(1).max(10).optional(),
+  showToasts: z.boolean().optional(),
 });
 
 const TuiStatusConfigSchema = z.object({
@@ -59,7 +60,10 @@ const TuiStatusConfigSchema = z.object({
   showAgentNotifications: z.boolean().optional(),
   showModeChanges: z.boolean().optional(),
   toastDuration: z.number().min(500).max(30000).optional(),
+  trackMetrics: z.boolean().optional(),
 });
+
+export type TuiStatusConfig = z.infer<typeof TuiStatusConfigSchema>;
 
 const OmoOmcsConfigSchema = z.object({
   $schema: z.string().optional(),
