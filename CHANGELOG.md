@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.7] - 2026-01-22
+
+### Added
+- MCP server configuration skill (`/oh-my-claudecode:mcp-setup`) for Context7, Exa, Filesystem, GitHub (#74)
+- MCP setup integrated into omc-setup wizard
+
+### Fixed
+- ralplan now ensures critic agent executes before plan approval in plan mode (#73)
+- README contradiction about command learning vs magic keywords (#72)
+
 ## [3.3.5] - 2026-01-22
 
 ### Fixed
