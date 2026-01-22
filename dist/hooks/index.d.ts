@@ -20,3 +20,4 @@ export type { RememberTagProcessorOptions } from "./remember-tag-processor";
 export { createContextRecoveryHook, type ContextRecoveryOptions } from "./context-recovery";
 export { createEditErrorRecoveryHook, type EditErrorRecoveryOptions } from "./edit-error-recovery";
 export { createOmcOrchestratorHook, type OmcOrchestratorOptions } from "./omc-orchestrator";
+export { createTuiStatusHook, type TuiStatusOptions } from "./tui-status";

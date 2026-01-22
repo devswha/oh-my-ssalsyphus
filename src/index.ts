@@ -14,6 +14,7 @@ import { createUltraQALoopHook } from "./hooks/ultraqa-loop";
 import { createContextRecoveryHook } from "./hooks/context-recovery";
 import { createEditErrorRecoveryHook } from "./hooks/edit-error-recovery";
 import { createOmcOrchestratorHook } from "./hooks/omc-orchestrator";
+import { createTuiStatusHook } from "./hooks/tui-status";
 import { log } from "./shared/logger";
 
 const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
@@ -74,6 +75,14 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
   const omcOrchestrator = createOmcOrchestratorHook(ctx, {
     delegationEnforcement: pluginConfig.orchestrator?.delegationEnforcement ?? 'warn',
     auditLogEnabled: pluginConfig.orchestrator?.auditLogEnabled ?? true,
+  });
+
+  // Create TUI status hook for agent visibility notifications
+  const tuiStatus = createTuiStatusHook(ctx, {
+    enabled: pluginConfig.tui_status?.enabled ?? true,
+    showAgentNotifications: pluginConfig.tui_status?.showAgentNotifications ?? true,
+    showModeChanges: pluginConfig.tui_status?.showModeChanges ?? true,
+    toastDuration: pluginConfig.tui_status?.toastDuration ?? 3000,
   });
 
   // Create config handler for agent/command registration
@@ -182,6 +191,9 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
 
       // Run orchestrator validation
       await omcOrchestrator["tool.execute.before"](input, output);
+
+      // TUI status - notify agent spawning
+      await tuiStatus["tool.execute.before"](input, output);
     },
     "tool.execute.after": async (
       input: { tool: string; sessionID: string; callID: string },
@@ -195,6 +207,9 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
 
       // Edit error recovery
       await editErrorRecovery["tool.execute.after"](input, output);
+
+      // TUI status - notify agent completion
+      await tuiStatus["tool.execute.after"](input, output);
     },
     tool: {
       ...backgroundTools,

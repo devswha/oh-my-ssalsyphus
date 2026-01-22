@@ -54,6 +54,13 @@ const EditErrorRecoveryConfigSchema = z.object({
   maxRetries: z.number().min(1).max(10).optional(),
 });
 
+const TuiStatusConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  showAgentNotifications: z.boolean().optional(),
+  showModeChanges: z.boolean().optional(),
+  toastDuration: z.number().min(500).max(30000).optional(),
+});
+
 const OmoOmcsConfigSchema = z.object({
   $schema: z.string().optional(),
   agents: z.record(z.string(), AgentConfigSchema).optional(),
@@ -69,6 +76,7 @@ const OmoOmcsConfigSchema = z.object({
   orchestrator: OrchestratorConfigSchema.optional(),
   context_recovery: ContextRecoveryConfigSchema.optional(),
   edit_error_recovery: EditErrorRecoveryConfigSchema.optional(),
+  tui_status: TuiStatusConfigSchema.optional(),
   sisyphus_agent: z.object({
     disabled: z.boolean().optional(),
     planner_enabled: z.boolean().optional(),

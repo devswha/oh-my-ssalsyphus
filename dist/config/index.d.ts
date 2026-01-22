@@ -113,6 +113,12 @@ declare const OmoOmcsConfigSchema: z.ZodObject<{
         enabled: z.ZodOptional<z.ZodBoolean>;
         maxRetries: z.ZodOptional<z.ZodNumber>;
     }, z.core.$strip>>;
+    tui_status: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodOptional<z.ZodBoolean>;
+        showAgentNotifications: z.ZodOptional<z.ZodBoolean>;
+        showModeChanges: z.ZodOptional<z.ZodBoolean>;
+        toastDuration: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strip>>;
     sisyphus_agent: z.ZodOptional<z.ZodObject<{
         disabled: z.ZodOptional<z.ZodBoolean>;
         planner_enabled: z.ZodOptional<z.ZodBoolean>;

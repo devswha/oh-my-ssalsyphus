@@ -13590,6 +13590,12 @@ var EditErrorRecoveryConfigSchema = exports_external.object({
   enabled: exports_external.boolean().optional(),
   maxRetries: exports_external.number().min(1).max(10).optional()
 });
+var TuiStatusConfigSchema = exports_external.object({
+  enabled: exports_external.boolean().optional(),
+  showAgentNotifications: exports_external.boolean().optional(),
+  showModeChanges: exports_external.boolean().optional(),
+  toastDuration: exports_external.number().min(500).max(30000).optional()
+});
 var OmoOmcsConfigSchema = exports_external.object({
   $schema: exports_external.string().optional(),
   agents: exports_external.record(exports_external.string(), AgentConfigSchema).optional(),
@@ -13605,6 +13611,7 @@ var OmoOmcsConfigSchema = exports_external.object({
   orchestrator: OrchestratorConfigSchema.optional(),
   context_recovery: ContextRecoveryConfigSchema.optional(),
   edit_error_recovery: EditErrorRecoveryConfigSchema.optional(),
+  tui_status: TuiStatusConfigSchema.optional(),
   sisyphus_agent: exports_external.object({
     disabled: exports_external.boolean().optional(),
     planner_enabled: exports_external.boolean().optional(),
@@ -30371,6 +30378,185 @@ function createOmcOrchestratorHook(ctx, options = {}) {
   };
 }
 
+// src/hooks/tui-status.ts
+var activeAgents = new Map;
+function createTuiStatusHook(ctx, options = {}) {
+  const {
+    enabled = true,
+    showAgentNotifications = true,
+    showModeChanges = true,
+    toastDuration = 3000
+  } = options;
+  async function showToast(opts) {
+    if (!enabled)
+      return;
+    try {
+      await ctx.client.tui.showToast({
+        body: {
+          title: opts.title,
+          message: opts.message,
+          variant: opts.variant,
+          duration: opts.duration ?? toastDuration
+        }
+      });
+    } catch (error92) {
+      log("[tui-status] Failed to show toast", { error: error92 });
+    }
+  }
+  async function notifyAgentStarted(agentName, task) {
+    if (!showAgentNotifications)
+      return;
+    activeAgents.set(agentName, {
+      name: agentName,
+      status: "running",
+      startTime: Date.now()
+    });
+    const emoji5 = getAgentEmoji(agentName);
+    const shortTask = task ? `: ${task.substring(0, 40)}${task.length > 40 ? "..." : ""}` : "";
+    await showToast({
+      title: `${emoji5} Agent Started`,
+      message: `${agentName}${shortTask}`,
+      variant: "info",
+      duration: 2000
+    });
+  }
+  async function notifyAgentCompleted(agentName, success3 = true) {
+    if (!showAgentNotifications)
+      return;
+    const agent = activeAgents.get(agentName);
+    if (agent) {
+      agent.status = success3 ? "completed" : "failed";
+      agent.endTime = Date.now();
+      const duration5 = ((agent.endTime - agent.startTime) / 1000).toFixed(1);
+      await showToast({
+        title: success3 ? "\u2705 Agent Completed" : "\u274C Agent Failed",
+        message: `${agentName} (${duration5}s)`,
+        variant: success3 ? "success" : "error",
+        duration: 2000
+      });
+      setTimeout(() => activeAgents.delete(agentName), 5000);
+    }
+  }
+  async function notifyModeChange(mode, active) {
+    if (!showModeChanges)
+      return;
+    const modeEmoji = {
+      autopilot: "\uD83E\uDD16",
+      "ralph-loop": "\uD83D\uDD04",
+      "ultrawork-ralph": "\u26A1\uD83D\uDD04",
+      ultrawork: "\u26A1",
+      ultraqa: "\uD83E\uDDEA",
+      ralplan: "\uD83D\uDCCB"
+    };
+    const emoji5 = modeEmoji[mode] || "\uD83D\uDD27";
+    await showToast({
+      title: active ? `${emoji5} Mode Activated` : `${emoji5} Mode Deactivated`,
+      message: mode.toUpperCase(),
+      variant: active ? "info" : "warning",
+      duration: 3000
+    });
+  }
+  async function notifyPhaseChange(phase, current, total) {
+    const phaseEmoji = {
+      expansion: "\uD83D\uDCDD",
+      planning: "\uD83D\uDCCB",
+      execution: "\uD83D\uDD28",
+      qa: "\uD83E\uDDEA",
+      validation: "\u2705",
+      complete: "\uD83C\uDF89"
+    };
+    const emoji5 = phaseEmoji[phase] || "\u25B6\uFE0F";
+    await showToast({
+      title: `${emoji5} Phase ${current}/${total}`,
+      message: phase.charAt(0).toUpperCase() + phase.slice(1),
+      variant: "info",
+      duration: 2500
+    });
+  }
+  async function notifyIteration(mode, current, max) {
+    await showToast({
+      title: `\uD83D\uDD04 ${mode} Iteration`,
+      message: `${current}/${max}`,
+      variant: "info",
+      duration: 1500
+    });
+  }
+  function getActiveAgents() {
+    return Array.from(activeAgents.values());
+  }
+  return {
+    showToast,
+    notifyAgentStarted,
+    notifyAgentCompleted,
+    notifyModeChange,
+    notifyPhaseChange,
+    notifyIteration,
+    getActiveAgents,
+    "tool.execute.before": async (input, output) => {
+      if (!enabled || !showAgentNotifications)
+        return;
+      if (input.tool === "Task" || input.tool === "task") {
+        const subagentType = output.args?.subagent_type;
+        const prompt = output.args?.prompt;
+        if (subagentType) {
+          const agentName = subagentType.includes(":") ? subagentType.split(":").pop() || subagentType : subagentType;
+          const taskSummary = prompt?.split(`
+`)[0]?.substring(0, 50);
+          await notifyAgentStarted(agentName, taskSummary);
+          log("[tui-status] Agent spawned", {
+            sessionID: input.sessionID,
+            agent: agentName,
+            task: taskSummary
+          });
+        }
+      }
+    },
+    "tool.execute.after": async (input, output) => {
+      if (!enabled || !showAgentNotifications)
+        return;
+      if (input.tool === "Task" || input.tool === "task") {
+        const metadata = output.metadata;
+        const agentName = metadata?.agent_name;
+        const success3 = !output.output?.toLowerCase().includes("error") && !output.output?.toLowerCase().includes("failed");
+        if (agentName) {
+          await notifyAgentCompleted(agentName, success3);
+        }
+      }
+    }
+  };
+}
+function getAgentEmoji(agentName) {
+  const emojiMap = {
+    architect: "\uD83C\uDFD7\uFE0F",
+    "architect-low": "\uD83C\uDFD7\uFE0F",
+    "architect-medium": "\uD83C\uDFD7\uFE0F",
+    analyst: "\uD83D\uDD0D",
+    critic: "\uD83D\uDCDD",
+    executor: "\u2699\uFE0F",
+    "executor-low": "\u2699\uFE0F",
+    "executor-high": "\u2699\uFE0F",
+    explore: "\uD83D\uDD0E",
+    "explore-medium": "\uD83D\uDD0E",
+    researcher: "\uD83D\uDCDA",
+    "researcher-low": "\uD83D\uDCDA",
+    designer: "\uD83C\uDFA8",
+    "designer-low": "\uD83C\uDFA8",
+    "designer-high": "\uD83C\uDFA8",
+    writer: "\u270D\uFE0F",
+    "qa-tester": "\uD83E\uDDEA",
+    "build-fixer": "\uD83D\uDD27",
+    "build-fixer-low": "\uD83D\uDD27",
+    "security-reviewer": "\uD83D\uDD12",
+    "security-reviewer-low": "\uD83D\uDD12",
+    scientist: "\uD83D\uDD2C",
+    "scientist-low": "\uD83D\uDD2C",
+    "scientist-high": "\uD83D\uDD2C",
+    vision: "\uD83D\uDC41\uFE0F",
+    planner: "\uD83D\uDCCB"
+  };
+  return emojiMap[agentName] || "\uD83E\uDD16";
+}
+
 // src/index.ts
 var OmoOmcsPlugin = async (ctx) => {
   const pluginConfig = loadConfig(ctx.directory);
@@ -30413,6 +30599,12 @@ var OmoOmcsPlugin = async (ctx) => {
   const omcOrchestrator = createOmcOrchestratorHook(ctx, {
     delegationEnforcement: pluginConfig.orchestrator?.delegationEnforcement ?? "warn",
     auditLogEnabled: pluginConfig.orchestrator?.auditLogEnabled ?? true
+  });
+  const tuiStatus = createTuiStatusHook(ctx, {
+    enabled: pluginConfig.tui_status?.enabled ?? true,
+    showAgentNotifications: pluginConfig.tui_status?.showAgentNotifications ?? true,
+    showModeChanges: pluginConfig.tui_status?.showModeChanges ?? true,
+    toastDuration: pluginConfig.tui_status?.toastDuration ?? 3000
   });
   const configHandler = createConfigHandler({
     ctx,
@@ -30482,11 +30674,13 @@ var OmoOmcsPlugin = async (ctx) => {
         }
       }
       await omcOrchestrator["tool.execute.before"](input, output);
+      await tuiStatus["tool.execute.before"](input, output);
     },
     "tool.execute.after": async (input, output) => {
       await rememberTagProcessor["tool.execute.after"](input, output);
       await contextRecovery["tool.execute.after"](input, output);
       await editErrorRecovery["tool.execute.after"](input, output);
+      await tuiStatus["tool.execute.after"](input, output);
     },
     tool: {
       ...backgroundTools,
