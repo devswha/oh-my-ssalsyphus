@@ -1,6 +1,6 @@
 {
   "name": "oh-my-claudecode-opencode",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "OpenCode port of oh-my-claudecode - Multi-agent orchestration plugin (omco)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -50,6 +50,7 @@
   "dependencies": {
     "@opencode-ai/plugin": "^1.1.26",
     "@opencode-ai/sdk": "^1.1.26",
+    "yaml": "^2.7.0",
     "zod": "^4.1.8"
   },
   "devDependencies": {

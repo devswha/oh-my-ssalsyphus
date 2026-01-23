@@ -17,8 +17,17 @@
  * - critic (was: momus) - Plan review (Opus)
  * - vision - Visual/media analysis (Sonnet)
  * - scientist - Data analysis and research execution (New in v3.3.6)
+ *
+ * Dynamic Loading (v3.4.0):
+ * Agents are loaded from assets/agents/*.md files at runtime.
+ * Hardcoded definitions below serve as fallback.
  */
 
+import { loadAllAgents, getAgentsDirectory } from './loader.js';
+import type { AgentDefinition as DynamicAgentDefinition } from './types.js';
+
+// Re-export the canonical AgentDefinition from types
+// Keep backward compatibility with optional fields for hardcoded definitions
 export interface AgentDefinition {
   name: string;
   description: string;
@@ -908,25 +917,17 @@ When delegating, your prompt MUST include:
 // AGENT REGISTRY
 // =============================================================================
 
-// Agent registry with both new names and backward-compatible aliases
-export const agents: Record<string, AgentDefinition> = {
+// Hardcoded agents as fallback (when dynamic loading fails or for missing agents)
+const HARDCODED_AGENTS: Record<string, AgentDefinition> = {
   // === ARCHITECT (was: Oracle) ===
   architect: architectAgent,
   "architect-low": architectLowAgent,
   "architect-medium": architectMediumAgent,
-  // Backward compatibility
-  oracle: architectAgent,
-  "oracle-low": architectLowAgent,
-  "oracle-medium": architectMediumAgent,
 
   // === EXECUTOR (was: Sisyphus-Junior) ===
   executor: executorAgent,
   "executor-low": executorLowAgent,
   "executor-high": executorHighAgent,
-  // Backward compatibility
-  "sisyphus-junior": executorAgent,
-  "sisyphus-junior-low": executorLowAgent,
-  "sisyphus-junior-high": executorHighAgent,
 
   // === EXPLORE ===
   explore: exploreAgent,
@@ -935,23 +936,14 @@ export const agents: Record<string, AgentDefinition> = {
   // === RESEARCHER (was: Librarian) ===
   researcher: researcherAgent,
   "researcher-low": researcherLowAgent,
-  // Backward compatibility
-  librarian: researcherAgent,
-  "librarian-low": researcherLowAgent,
 
   // === DESIGNER (was: Frontend-Engineer) ===
   designer: designerAgent,
   "designer-low": designerLowAgent,
   "designer-high": designerHighAgent,
-  // Backward compatibility
-  "frontend-engineer": designerAgent,
-  "frontend-engineer-low": designerLowAgent,
-  "frontend-engineer-high": designerHighAgent,
 
   // === WRITER (was: Document-Writer) ===
   writer: writerAgent,
-  // Backward compatibility
-  "document-writer": writerAgent,
 
   // === QA TESTER ===
   "qa-tester": qaTesterAgent,
@@ -962,11 +954,6 @@ export const agents: Record<string, AgentDefinition> = {
   analyst: analystAgent,
   critic: criticAgent,
   vision: visionAgent,
-  // Backward compatibility for planning agents
-  prometheus: plannerAgent,
-  metis: analystAgent,
-  momus: criticAgent,
-  "multimodal-looker": visionAgent,
 
   // === SCIENTIST (New in v3.3.6) ===
   scientist: scientistAgent,
@@ -977,6 +964,110 @@ export const agents: Record<string, AgentDefinition> = {
   coordinator: coordinatorAgent,
 };
 
+// Backward-compatible aliases mapping to canonical names
+const AGENT_ALIASES: Record<string, string> = {
+  // Oracle -> Architect
+  oracle: "architect",
+  "oracle-low": "architect-low",
+  "oracle-medium": "architect-medium",
+  // Sisyphus-Junior -> Executor
+  "sisyphus-junior": "executor",
+  "sisyphus-junior-low": "executor-low",
+  "sisyphus-junior-high": "executor-high",
+  // Librarian -> Researcher
+  librarian: "researcher",
+  "librarian-low": "researcher-low",
+  // Frontend-Engineer -> Designer
+  "frontend-engineer": "designer",
+  "frontend-engineer-low": "designer-low",
+  "frontend-engineer-high": "designer-high",
+  // Document-Writer -> Writer
+  "document-writer": "writer",
+  // Planning agents
+  prometheus: "planner",
+  metis: "analyst",
+  momus: "critic",
+  "multimodal-looker": "vision",
+};
+
+// Mutable registry that gets populated at module load
+let agents: Record<string, AgentDefinition> = {};
+let initialized = false;
+
+/**
+ * Converts a DynamicAgentDefinition to the legacy AgentDefinition format
+ */
+function normalizeDynamicAgent(agent: DynamicAgentDefinition): AgentDefinition {
+  return {
+    name: agent.name,
+    description: agent.description,
+    systemPrompt: agent.systemPrompt,
+    model: agent.model,
+    readOnly: agent.readOnly,
+    tools: agent.tools.length > 0 ? agent.tools : undefined,
+  };
+}
+
+/**
+ * Initialize the agent registry by loading dynamic agents and merging with hardcoded fallback
+ */
+async function initializeAgents(): Promise<void> {
+  if (initialized) return;
+
+  // Start with hardcoded agents as base
+  agents = { ...HARDCODED_AGENTS };
+
+  // Try to load dynamic agents from assets/agents/
+  try {
+    const agentsDir = getAgentsDirectory();
+    const dynamicAgents = await loadAllAgents(agentsDir);
+
+    // Dynamic agents override hardcoded ones
+    for (const [name, agent] of dynamicAgents) {
+      agents[name] = normalizeDynamicAgent(agent);
+    }
+  } catch (error) {
+    // Silent fallback to hardcoded agents
+    // This is expected when assets/agents/ doesn't exist or is inaccessible
+  }
+
+  // Add aliases (these always point to the current agent, whether dynamic or hardcoded)
+  for (const [alias, canonical] of Object.entries(AGENT_ALIASES)) {
+    if (agents[canonical]) {
+      agents[alias] = agents[canonical];
+    }
+  }
+
+  initialized = true;
+}
+
+// Synchronous initialization for backward compatibility
+// Uses hardcoded agents immediately, async loading happens in background
+function initializeAgentsSync(): void {
+  if (initialized) return;
+
+  // Start with hardcoded agents + aliases
+  agents = { ...HARDCODED_AGENTS };
+  for (const [alias, canonical] of Object.entries(AGENT_ALIASES)) {
+    if (agents[canonical]) {
+      agents[alias] = agents[canonical];
+    }
+  }
+
+  // Trigger async loading in background (will update registry when complete)
+  initializeAgents().catch(() => {
+    // Silently ignore errors, hardcoded agents are already loaded
+  });
+
+  initialized = true;
+}
+
+// Initialize synchronously on module load for backward compatibility
+initializeAgentsSync();
+
+// Export the agents registry (mutable, gets updated after async load)
+export { agents };
+
 export function getAgent(name: string): AgentDefinition | undefined {
   return agents[name];
 }
@@ -984,38 +1075,14 @@ export function getAgent(name: string): AgentDefinition | undefined {
 export function listAgents(): AgentDefinition[] {
   // Return unique agents (excluding aliases)
   const uniqueAgents = new Set<AgentDefinition>();
-  const primaryNames = [
-    "architect",
-    "architect-low",
-    "architect-medium",
-    "executor",
-    "executor-low",
-    "executor-high",
-    "explore",
-    "explore-medium",
-    "researcher",
-    "researcher-low",
-    "designer",
-    "designer-low",
-    "designer-high",
-    "writer",
-    "qa-tester",
-    "qa-tester-high",
-    "planner",
-    "analyst",
-    "critic",
-    "vision",
-    "scientist",
-    "scientist-low",
-    "scientist-high",
-    "coordinator",
-  ];
-  for (const name of primaryNames) {
-    const agent = agents[name];
-    if (agent) {
+
+  for (const [name, agent] of Object.entries(agents)) {
+    // Skip aliases - only include primary names
+    if (!isAlias(name)) {
       uniqueAgents.add(agent);
     }
   }
+
   return Array.from(uniqueAgents);
 }
 
@@ -1030,48 +1097,27 @@ export function listAgentNames(): string[] {
  * Check if a name is an alias (backward compatibility name)
  */
 export function isAlias(name: string): boolean {
-  const aliases = [
-    "oracle",
-    "oracle-low",
-    "oracle-medium",
-    "librarian",
-    "librarian-low",
-    "frontend-engineer",
-    "frontend-engineer-low",
-    "frontend-engineer-high",
-    "document-writer",
-    "sisyphus-junior",
-    "sisyphus-junior-low",
-    "sisyphus-junior-high",
-    "prometheus",
-    "metis",
-    "momus",
-    "multimodal-looker",
-  ];
-  return aliases.includes(name);
+  return name in AGENT_ALIASES;
 }
 
 /**
  * Get the canonical (new) name for an agent
  */
 export function getCanonicalName(name: string): string {
-  const aliasMap: Record<string, string> = {
-    oracle: "architect",
-    "oracle-low": "architect-low",
-    "oracle-medium": "architect-medium",
-    librarian: "researcher",
-    "librarian-low": "researcher-low",
-    "frontend-engineer": "designer",
-    "frontend-engineer-low": "designer-low",
-    "frontend-engineer-high": "designer-high",
-    "document-writer": "writer",
-    "sisyphus-junior": "executor",
-    "sisyphus-junior-low": "executor-low",
-    "sisyphus-junior-high": "executor-high",
-    prometheus: "planner",
-    metis: "analyst",
-    momus: "critic",
-    "multimodal-looker": "vision",
-  };
-  return aliasMap[name] || name;
+  return AGENT_ALIASES[name] || name;
+}
+
+/**
+ * Force reload agents from disk (useful for hot-reloading during development)
+ */
+export async function reloadAgents(): Promise<void> {
+  initialized = false;
+  await initializeAgents();
+}
+
+/**
+ * Get the list of primary (non-alias) agent names
+ */
+export function getPrimaryAgentNames(): string[] {
+  return Object.keys(agents).filter(name => !isAlias(name));
 }

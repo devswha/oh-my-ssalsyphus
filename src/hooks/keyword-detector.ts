@@ -5,6 +5,9 @@ import type { ActiveMode } from "./system-prompt-injector";
 const ULTRAWORK_KEYWORDS = ["ultrawork", "ulw", "uw"];
 const SEARCH_KEYWORDS = ["deepsearch", "search", "find"];
 const ANALYZE_KEYWORDS = ["analyze", "investigate"];
+const RALPH_KEYWORDS = ["ralph", "don't stop", "must complete", "until done"];
+const PLAN_KEYWORDS = ["plan this", "ralplan", "plan the"];
+const AUTOPILOT_KEYWORDS = ["autopilot", "build me", "i want a"];
 
 function removeCodeBlocks(text: string): string {
   return text.replace(/```[\s\S]*?```/g, "").replace(/`[^`]+`/g, "");
@@ -26,6 +29,15 @@ function detectKeywords(text: string): { type: string; detected: boolean }[] {
 
   const hasAnalyze = ANALYZE_KEYWORDS.some((k) => cleanText.includes(k));
   results.push({ type: "analyze", detected: hasAnalyze });
+
+  const hasRalph = RALPH_KEYWORDS.some((k) => cleanText.includes(k));
+  results.push({ type: "ralph", detected: hasRalph });
+
+  const hasPlan = PLAN_KEYWORDS.some((k) => cleanText.includes(k));
+  results.push({ type: "plan", detected: hasPlan });
+
+  const hasAutopilot = AUTOPILOT_KEYWORDS.some((k) => cleanText.includes(k));
+  results.push({ type: "autopilot", detected: hasAutopilot });
 
   return results;
 }

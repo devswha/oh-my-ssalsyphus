@@ -3,6 +3,7 @@ import type { OmoOmcsConfig } from "../config";
 import { agents, type AgentDefinition } from "../agents";
 import { log } from "../shared/logger";
 import { ModelResolver, type AgentModelConfig } from "../config/model-resolver";
+import { getInvocableSkills } from '../skills/index.js';
 
 // OpenCode Config types (from SDK)
 interface AgentConfig {
@@ -1026,13 +1027,29 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
       config.command = {};
     }
 
-    // Register slash commands
+    // Register hardcoded commands (fallback)
     for (const [name, commandConfig] of Object.entries(SLASH_COMMANDS)) {
-      // Skip if disabled
-      if (pluginConfig.disabled_skills?.includes(name)) {
-        continue;
+      if (!pluginConfig.disabled_skills?.includes(name)) {
+        config.command[name] = commandConfig;
       }
-      config.command[name] = commandConfig;
+    }
+
+    // Override with dynamic skills
+    let dynamicSkillCount = 0;
+    try {
+      const dynamicSkills = getInvocableSkills();
+      for (const skill of dynamicSkills) {
+        if (!pluginConfig.disabled_skills?.includes(skill.metadata.name)) {
+          config.command[skill.metadata.name] = {
+            template: `[${skill.metadata.name.toUpperCase()} ACTIVATED]\n\n${skill.content}\n\nARGUMENTS: $ARGUMENTS`,
+            description: skill.metadata.description,
+            agent: "Ssalsyphus",
+          };
+          dynamicSkillCount++;
+        }
+      }
+    } catch (e) {
+      log("Dynamic skill loading failed, using hardcoded commands only", { error: String(e) });
     }
 
     log("Ssalsyphus agent and commands registered", {
@@ -1041,6 +1058,7 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
       commands: Object.keys(SLASH_COMMANDS).filter(
         (c) => !pluginConfig.disabled_skills?.includes(c)
       ),
+      dynamicSkills: dynamicSkillCount,
     });
   };
 }
