@@ -4,11 +4,13 @@
 
 ## Porting Context
 
-oh-my-claudecode의 28개 전문 에이전트 정의를 그대로 포팅. 레거시 이름(oracle, librarian 등)과 새 이름(architect, researcher 등) 모두 지원. 에이전트 시스템 프롬프트와 역할 정의는 oh-my-claudecode v3.0.11과 동일하게 유지되었으며, OpenCode 에이전트 설정 형식으로 변환되었다.
+oh-my-claudecode의 24개 전문 에이전트 정의를 포팅. 레거시 이름(oracle, librarian 등)과 새 이름(architect, researcher 등) 모두 지원. 에이전트 시스템 프롬프트와 역할 정의는 oh-my-claudecode v3.0.11과 동일하게 유지되었으며, OpenCode 에이전트 설정 형식으로 변환되었다.
+
+**Note**: OMC의 Security, Build, TDD, Code Review 에이전트(4개 추가 에이전트)는 향후 버전에서 구현 예정.
 
 ## Overview
 
-This directory contains the core agent definition system for omo-omcs. It defines all 28+ specialized agents available for multi-agent orchestration, following the oh-my-claudecode v3.0.11 naming conventions.
+This directory contains the core agent definition system for omo-omcs. It defines 24 specialized agents available for multi-agent orchestration, following the oh-my-claudecode v3.0.11 naming conventions.
 
 ## Architecture
 
@@ -24,7 +26,7 @@ The agent system provides a type-safe, hierarchical agent registry with:
 **Purpose**: Central agent registry and definitions
 **Exports**:
 - `AgentDefinition` - Interface for agent configuration
-- `agents` - Map of all 28+ agent definitions by role and tier
+- `agents` - Map of all 24 agent definitions by role and tier
 - Agent constants organized by domain (architect, executor, designer, etc.)
 
 **Agent Categories**:
@@ -57,20 +59,15 @@ The agent system provides a type-safe, hierarchical agent registry with:
 9. **QA Agents**
    - `qa-tester`, `qa-tester-high` - Interactive CLI testing
 
-10. **Security Agents**
-    - `security-reviewer-low`, `security-reviewer` - Security analysis
-
-11. **Build Agents**
-    - `build-fixer-low`, `build-fixer` - Build error resolution
-
-12. **TDD Agents**
-    - `tdd-guide-low`, `tdd-guide` - Test-driven development
-
-13. **Code Review Agents**
-    - `code-reviewer-low`, `code-reviewer` - Code quality review
-
-14. **Data Science Agents**
+10. **Data Science Agents**
     - `scientist-low`, `scientist`, `scientist-high` - Data analysis & ML
+
+### Future Agents (Planned)
+The following agent categories from OMC are planned for future versions:
+- **Security Agents**: `security-reviewer-low`, `security-reviewer` - Security analysis
+- **Build Agents**: `build-fixer-low`, `build-fixer` - Build error resolution
+- **TDD Agents**: `tdd-guide-low`, `tdd-guide` - Test-driven development
+- **Code Review Agents**: `code-reviewer-low`, `code-reviewer` - Code quality review
 
 ## Usage Patterns
 

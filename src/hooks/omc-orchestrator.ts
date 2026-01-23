@@ -32,7 +32,20 @@ const TOOL_RESTRICTIONS: Record<string, string[]> = {
   "explore-medium": ["Write", "Edit"],
   researcher: ["Write", "Edit"],
   "researcher-low": ["Write", "Edit"],
+  // EXECUTOR agents - block Task (no delegation)
+  executor: ["Task"],
+  "executor-low": ["Task"],
+  "executor-high": ["Task"],
 };
+
+const ALLOWED_DIRECT_WRITE_PATTERNS = [
+  /^\.omc\//,
+  /^\.claude\//,
+  /CLAUDE\.md$/,
+  /AGENTS\.md$/,
+];
+
+const WARNED_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".svelte", ".vue"];
 
 function getAuditLogPath(projectDir: string): string {
   return path.join(projectDir, ".omc", "logs", "delegation-audit.jsonl");
@@ -65,6 +78,26 @@ export function createOmcOrchestratorHook(
       input: { tool: string; sessionID: string; callID: string },
       output: { args: Record<string, unknown> }
     ): Promise<void> => {
+      // Handle Write/Edit tool warnings (OMCO-006)
+      if (input.tool === "write" || input.tool === "Write" ||
+          input.tool === "edit" || input.tool === "Edit") {
+        const filePath = output.args.file_path as string;
+        if (filePath) {
+          // Check if file should trigger a warning
+          const isAllowed = ALLOWED_DIRECT_WRITE_PATTERNS.some(pattern => pattern.test(filePath));
+          const ext = path.extname(filePath);
+          const shouldWarn = !isAllowed && WARNED_EXTENSIONS.includes(ext);
+
+          if (shouldWarn) {
+            log("[omc-orchestrator] Direct write to source file detected", {
+              tool: input.tool,
+              file: filePath,
+              sessionID: input.sessionID,
+            });
+          }
+        }
+      }
+
       // Only intercept task tool (agent delegation)
       if (input.tool !== "task" && input.tool !== "Task") return;
 

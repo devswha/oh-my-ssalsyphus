@@ -1,6 +1,7 @@
 import type { PluginInput } from "@opencode-ai/plugin";
 import type { BackgroundTaskConfig } from "../config";
 import { log } from "../shared/logger";
+import { getAgent, getCanonicalName, isAlias } from "../agents";
 
 export interface BackgroundTask {
   id: string;
@@ -93,13 +94,34 @@ export function createBackgroundManager(
 
         task.sessionID = sessionID;
 
+        // Apply OMCO-002: Inject agent system prompt
+        const canonicalName = isAlias(agent) ? getCanonicalName(agent) : agent;
+        const agentDef = getAgent(canonicalName);
+        const systemPrompt = agentDef?.systemPrompt || "";
+        const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+
         await ctx.client.session.prompt({
           path: { id: sessionID },
           body: {
-            parts: [{ type: "text", text: prompt }],
+            parts: [{ type: "text", text: fullPrompt }],
           },
           query: { directory: ctx.directory },
         });
+
+        // Extract agent response from session messages
+        const messagesResp = await ctx.client.session.messages({
+          path: { id: sessionID },
+        });
+        const messages = (messagesResp.data ?? []) as Array<{
+          info?: { role?: string };
+          parts?: Array<{ type: string; text?: string }>;
+        }>;
+        const lastAssistant = [...messages].reverse().find(m => m.info?.role === "assistant");
+        const result = lastAssistant?.parts
+          ?.filter(p => p.type === "text" && p.text)
+          .map(p => p.text)
+          .join("\n") || "";
+        task.result = result;
 
         task.status = "completed";
         task.completedAt = Date.now();
