@@ -3,8 +3,7 @@ import { fileURLToPath } from 'url';
 import { loadAllSkills } from './loader.js';
 import type { Skill } from './types.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Load all skills at module initialization
 const SKILLS_DIR = join(__dirname, '../../assets/skills');

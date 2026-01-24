@@ -1,9 +1,6 @@
 import { readFileSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import type { Skill, SkillMetadata } from './types.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { join } from 'path';
+import type { Skill } from './types.js';
 
 /**
  * Simple YAML frontmatter parser
