@@ -3,6 +3,7 @@ import type { BackgroundManager } from "../tools/background-manager";
 import { log } from "../shared/logger";
 import { getMainSessionID } from "../shared/session-state";
 import { getContinuationMessage } from "./continuation-messages";
+import { isSessionPaused, pauseSession, clearSessionPauseState } from "../state/session-pause-state";
 
 export interface TodoContinuationEnforcerOptions {
   backgroundManager?: BackgroundManager;
@@ -26,7 +27,6 @@ interface SessionState {
   countdownInterval?: ReturnType<typeof setInterval>;
   isRecovering?: boolean;
   countdownStartedAt?: number;
-  abortDetectedAt?: number;
   /** Track consecutive idle events for smarter detection */
   consecutiveIdleCount?: number;
   lastIdleAt?: number;
@@ -247,10 +247,10 @@ export function createTodoContinuationEnforcer(
       if (!sessionID) return;
 
       const error = props?.error as { name?: string } | undefined;
-      if (error?.name === "MessageAbortedError" || error?.name === "AbortError") {
-        const state = getState(sessionID);
-        state.abortDetectedAt = Date.now();
-        log(`Abort detected`, { sessionID, errorName: error.name });
+      // Only check MessageAbortedError - AbortError is not in SDK types
+      if (error?.name === "MessageAbortedError") {
+        pauseSession(sessionID, 'user_abort');
+        log(`Abort detected - session paused`, { sessionID });
       }
 
       cancelCountdown(sessionID);
@@ -287,15 +287,10 @@ export function createTodoContinuationEnforcer(
         return;
       }
 
-      if (state.abortDetectedAt) {
-        const timeSinceAbort = Date.now() - state.abortDetectedAt;
-        const ABORT_WINDOW_MS = 3000;
-        if (timeSinceAbort < ABORT_WINDOW_MS) {
-          log(`Skipped: abort detected ${timeSinceAbort}ms ago`, { sessionID });
-          state.abortDetectedAt = undefined;
-          return;
-        }
-        state.abortDetectedAt = undefined;
+      // Check if session is paused (user pressed ESC / abort)
+      if (isSessionPaused(sessionID)) {
+        log(`Skipped: session is paused`, { sessionID });
+        return;
       }
 
       const hasRunningBgTasks = backgroundManager
@@ -339,8 +334,6 @@ export function createTodoContinuationEnforcer(
       if (!sessionID) return;
 
       if (role === "user" || role === "assistant") {
-        const state = sessions.get(sessionID);
-        if (state) state.abortDetectedAt = undefined;
         cancelCountdown(sessionID);
       }
       return;
@@ -349,8 +342,6 @@ export function createTodoContinuationEnforcer(
     if (event.type === "tool.execute.before" || event.type === "tool.execute.after") {
       const sessionID = props?.sessionID as string | undefined;
       if (sessionID) {
-        const state = sessions.get(sessionID);
-        if (state) state.abortDetectedAt = undefined;
         cancelCountdown(sessionID);
       }
       return;
@@ -359,6 +350,7 @@ export function createTodoContinuationEnforcer(
     if (event.type === "session.deleted") {
       const sessionInfo = props?.info as { id?: string } | undefined;
       if (sessionInfo?.id) {
+        clearSessionPauseState(sessionInfo.id);
         cancelCountdown(sessionInfo.id);
         sessions.delete(sessionInfo.id);
         log(`Session deleted: cleaned up`, { sessionID: sessionInfo.id });

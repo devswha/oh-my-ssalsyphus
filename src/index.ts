@@ -16,6 +16,7 @@ import { createEditErrorRecoveryHook } from "./hooks/edit-error-recovery";
 import { createOmcOrchestratorHook } from "./hooks/omc-orchestrator";
 import { createTuiStatusHook } from "./hooks/tui-status";
 import { log } from "./shared/logger";
+import { resumeSession, isSessionPaused } from "./state/session-pause-state";
 
 const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
   const pluginConfig = loadConfig(ctx.directory);
@@ -169,6 +170,12 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
       } else {
         // Clear skill injection when no context detected (prevents persistence bug)
         systemPromptInjector.clearSkillInjection(input.sessionID);
+      }
+
+      // Auto-resume session on any user prompt (clears ESC/abort pause)
+      if (isSessionPaused(input.sessionID)) {
+        resumeSession(input.sessionID);
+        log("[session] Auto-resumed on user prompt", { sessionID: input.sessionID });
       }
 
       // Handle autopilot chat messages
