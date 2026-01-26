@@ -1,9 +1,14 @@
 import { tool, type PluginInput, type ToolDefinition } from "@opencode-ai/plugin";
 import type { BackgroundManager, ModelConfig } from "./background-manager";
+import type { ModelResolutionService } from "./model-resolution-service";
 import { getAgent, listAgentNames, getCanonicalName, isAlias } from "../agents";
 import { log } from "../shared/logger";
 
-export function createCallOmcoAgent(ctx: PluginInput, manager: BackgroundManager): ToolDefinition {
+export function createCallOmcoAgent(
+  ctx: PluginInput,
+  manager: BackgroundManager,
+  modelService?: ModelResolutionService
+): ToolDefinition {
   // Generate dynamic agent list for description
   const agentNames = listAgentNames();
   const agentList = agentNames.map(name => {
@@ -43,8 +48,19 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
       // OMCO-002: Inject agent system prompt
       const enhancedPrompt = `${agent.systemPrompt}\n\n---\n\n${prompt}`;
 
-      // OMCO-003: Get parent session model to inherit provider/model
+      // OMCO-003: Resolve model for agent
+      // Priority: tier mapping (if configured) > parent session model
       const parentModel = await manager.getParentSessionModel(context.sessionID);
+      const resolvedModel = modelService 
+        ? modelService.resolveModelForAgent(subagent_type, parentModel)
+        : parentModel;
+      
+      if (resolvedModel && resolvedModel !== parentModel) {
+        log(`[call-omco-agent] Using tier-mapped model for ${subagent_type}`, {
+          providerID: resolvedModel.providerID,
+          modelID: resolvedModel.modelID,
+        });
+      }
 
       if (run_in_background) {
         const task = await manager.createTask(
@@ -52,7 +68,7 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
           description,
           enhancedPrompt,
           subagent_type,
-          parentModel
+          resolvedModel
         );
 
         return JSON.stringify({
@@ -75,7 +91,7 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
         const sessionID = (sessionResp.data as { id?: string })?.id ?? (sessionResp as { id?: string }).id;
         if (!sessionID) throw new Error("Failed to create session");
 
-        // Build prompt body with parent model if available
+        // Build prompt body with resolved model if available
         const promptBody: {
           parts: Array<{ type: "text"; text: string }>;
           model?: ModelConfig;
@@ -83,9 +99,9 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
           parts: [{ type: "text" as const, text: enhancedPrompt }],
         };
 
-        if (parentModel) {
-          promptBody.model = parentModel;
-          log(`Using parent model for sync agent call`, { subagent_type, ...parentModel });
+        if (resolvedModel) {
+          promptBody.model = resolvedModel;
+          log(`Using resolved model for sync agent call`, { subagent_type, ...resolvedModel });
         }
 
         const promptResp = await ctx.client.session.prompt({

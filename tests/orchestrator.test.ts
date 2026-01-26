@@ -393,6 +393,12 @@ describe("Orchestrator Integration", () => {
             status: "running",
           })
         ),
+        getParentSessionModel: mock(() =>
+          Promise.resolve({
+            providerID: "github-copilot",
+            modelID: "claude-opus-4.5",
+          })
+        ),
       } as unknown as BackgroundManager;
     });
 

@@ -1,5 +1,6 @@
 import type { PluginInput } from "@opencode-ai/plugin";
 import type { BackgroundTaskConfig } from "../config";
+import type { ModelResolutionService } from "./model-resolution-service";
 import { log } from "../shared/logger";
 import { getAgent, getCanonicalName, isAlias } from "../agents";
 
@@ -45,7 +46,8 @@ function generateTaskId(): string {
 
 export function createBackgroundManager(
   ctx: PluginInput,
-  config?: BackgroundTaskConfig
+  config?: BackgroundTaskConfig,
+  modelService?: ModelResolutionService
 ): BackgroundManager {
   const tasks = new Map<string, BackgroundTask>();
   const defaultConcurrency = config?.defaultConcurrency ?? 5;
@@ -136,8 +138,18 @@ export function createBackgroundManager(
 
     log(`Background task created`, { taskId, description, agent });
 
-    // Get model from parent session if not provided
-    const resolvedModel = model || await getParentSessionModel(parentSessionID);
+    // Resolve model: explicit model > tier mapping > parent session model
+    const parentModel = model || await getParentSessionModel(parentSessionID);
+    const resolvedModel = modelService
+      ? modelService.resolveModelForAgent(agent, parentModel)
+      : parentModel;
+    
+    if (resolvedModel && resolvedModel !== parentModel) {
+      log(`[background-manager] Using tier-mapped model for ${agent}`, {
+        providerID: resolvedModel.providerID,
+        modelID: resolvedModel.modelID,
+      });
+    }
 
     (async () => {
       try {

@@ -3,6 +3,7 @@ import { loadConfig } from "./config";
 import { createBackgroundManager } from "./tools/background-manager";
 import { createBackgroundTools } from "./tools/background-tools";
 import { createCallOmcoAgent } from "./tools/call-omco-agent";
+import { createModelResolutionService } from "./tools/model-resolution-service";
 import { createConfigHandler } from "./plugin-handlers/config-handler";
 import { createRalphLoopHook } from "./hooks/ralph-loop";
 import { createPersistentModeHook, checkPersistentModes } from "./hooks/persistent-mode";
@@ -22,9 +23,19 @@ const OmoOmcsPlugin: Plugin = async (ctx: PluginInput) => {
   const pluginConfig = loadConfig(ctx.directory);
   console.log("[omco] Config loaded:", pluginConfig);
 
-  const backgroundManager = createBackgroundManager(ctx, pluginConfig.background_task);
+  // Create model resolution service for tier-based model mapping
+  const modelService = createModelResolutionService(
+    pluginConfig.model_mapping,
+    pluginConfig.agents
+  );
+  
+  if (modelService.isTierMappingConfigured()) {
+    log("[omco] Model tier mapping configured - agents will use tier-specific models");
+  }
+
+  const backgroundManager = createBackgroundManager(ctx, pluginConfig.background_task, modelService);
   const backgroundTools = createBackgroundTools(backgroundManager, ctx.client);
-  const callOmcoAgent = createCallOmcoAgent(ctx, backgroundManager);
+  const callOmcoAgent = createCallOmcoAgent(ctx, backgroundManager, modelService);
 
   // Create system prompt injector for mode tracking
   const systemPromptInjector = createSystemPromptInjector(ctx);
