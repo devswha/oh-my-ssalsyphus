@@ -95,6 +95,38 @@ export declare const qaTesterAgent: AgentDefinition;
  */
 export declare const qaTesterHighAgent: AgentDefinition;
 /**
+ * Build Fixer (Sonnet) - Build and TypeScript error resolution specialist
+ */
+export declare const buildFixerAgent: AgentDefinition;
+/**
+ * Build Fixer Low (Haiku) - Fast build error fixes
+ */
+export declare const buildFixerLowAgent: AgentDefinition;
+/**
+ * Code Reviewer (Opus) - Expert code review specialist
+ */
+export declare const codeReviewerAgent: AgentDefinition;
+/**
+ * Code Reviewer Low (Haiku) - Quick code checks
+ */
+export declare const codeReviewerLowAgent: AgentDefinition;
+/**
+ * TDD Guide (Sonnet) - Test-Driven Development specialist
+ */
+export declare const tddGuideAgent: AgentDefinition;
+/**
+ * TDD Guide Low (Haiku) - Quick test suggestions
+ */
+export declare const tddGuideLowAgent: AgentDefinition;
+/**
+ * Security Reviewer (Opus) - Security vulnerability detection specialist
+ */
+export declare const securityReviewerAgent: AgentDefinition;
+/**
+ * Security Reviewer Low (Haiku) - Quick security scans
+ */
+export declare const securityReviewerLowAgent: AgentDefinition;
+/**
  * Planner (Opus) - Strategic Planning Specialist
  */
 export declare const plannerAgent: AgentDefinition;
