@@ -100,7 +100,7 @@ export function createBackgroundManager(
         const systemPrompt = agentDef?.systemPrompt || "";
         const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
 
-        await ctx.client.session.prompt({
+        const promptResp = await ctx.client.session.prompt({
           path: { id: sessionID },
           body: {
             parts: [{ type: "text", text: fullPrompt }],
@@ -108,18 +108,29 @@ export function createBackgroundManager(
           query: { directory: ctx.directory },
         });
 
-        // Extract agent response from session messages
-        const messagesResp = await ctx.client.session.messages({
-          path: { id: sessionID },
-        });
-        const messages = (messagesResp.data ?? []) as Array<{
-          info?: { role?: string };
+        const promptData = promptResp.data as {
+          info?: {
+            role?: string;
+            error?: { name: string; data?: { providerID?: string; message?: string } };
+          };
           parts?: Array<{ type: string; text?: string }>;
-        }>;
-        const lastAssistant = [...messages].reverse().find(m => m.info?.role === "assistant");
-        const result = lastAssistant?.parts
-          ?.filter(p => p.type === "text" && p.text)
-          .map(p => p.text)
+        } | undefined;
+
+        // Check for HTTP-level errors
+        if (promptResp.error) {
+          throw new Error(`Prompt failed: ${JSON.stringify(promptResp.error)}`);
+        }
+
+        // Check for provider auth errors (401)
+        if (promptData?.info?.error) {
+          const err = promptData.info.error;
+          const errMsg = err.data?.message || err.name || "Unknown error";
+          throw new Error(`[${err.name}] ${errMsg}`);
+        }
+
+        const result = promptData?.parts
+          ?.filter((p) => p.type === "text" && p.text)
+          .map((p) => p.text)
           .join("\n") || "";
         task.result = result;
 
@@ -170,6 +181,16 @@ export function createBackgroundManager(
     task.status = "cancelled";
     task.completedAt = Date.now();
 
+    // Abort the running session
+    if (task.sessionID) {
+      ctx.client.session.abort({
+        path: { id: task.sessionID },
+        query: { directory: ctx.directory },
+      }).catch((err) => {
+        log(`Failed to abort session for task ${taskId}`, { error: String(err) });
+      });
+    }
+
     log(`Background task cancelled`, { taskId });
     return true;
   };
@@ -182,6 +203,16 @@ export function createBackgroundManager(
           task.status = "cancelled";
           task.completedAt = Date.now();
           count++;
+
+          // Abort the running session
+          if (task.sessionID) {
+            ctx.client.session.abort({
+              path: { id: task.sessionID },
+              query: { directory: ctx.directory },
+            }).catch((err) => {
+              log(`Failed to abort session for task ${task.id}`, { error: String(err) });
+            });
+          }
         }
       }
     }

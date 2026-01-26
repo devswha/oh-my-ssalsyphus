@@ -367,20 +367,17 @@ describe("Orchestrator Integration", () => {
                 data: { id: "test-session-id" },
               })
             ),
-            prompt: mock(() => Promise.resolve({})),
-            messages: mock(() =>
+            prompt: mock(() =>
               Promise.resolve({
-                data: [
-                  {
-                    info: { role: "assistant" },
-                    parts: [
-                      {
-                        type: "text",
-                        text: "Agent completed successfully",
-                      },
-                    ],
-                  },
-                ],
+                data: {
+                  info: { role: "assistant" },
+                  parts: [
+                    {
+                      type: "text",
+                      text: "Agent completed successfully",
+                    },
+                  ],
+                },
               })
             ),
           },

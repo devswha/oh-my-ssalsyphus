@@ -74,7 +74,7 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
         const sessionID = (sessionResp.data as { id?: string })?.id ?? (sessionResp as { id?: string }).id;
         if (!sessionID) throw new Error("Failed to create session");
 
-        await ctx.client.session.prompt({
+        const promptResp = await ctx.client.session.prompt({
           path: { id: sessionID },
           body: {
             parts: [{ type: "text", text: enhancedPrompt }],
@@ -82,19 +82,37 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
           query: { directory: ctx.directory },
         });
 
-        const messagesResp = await ctx.client.session.messages({
-          path: { id: sessionID },
-        });
+        // Check for HTTP-level errors
+        if (promptResp.error) {
+          return JSON.stringify({
+            session_id: sessionID,
+            status: "failed",
+            error: `Prompt failed: ${JSON.stringify(promptResp.error)}`,
+          });
+        }
 
-        const messages = (messagesResp.data ?? []) as Array<{
-          info?: { role?: string };
+        const promptData = promptResp.data as {
+          info?: {
+            role?: string;
+            error?: { name: string; data?: { providerID?: string; message?: string } };
+          };
           parts?: Array<{ type: string; text?: string }>;
-        }>;
+        } | undefined;
 
-        const lastAssistant = [...messages].reverse().find(m => m.info?.role === "assistant");
-        const result = lastAssistant?.parts
-          ?.filter(p => p.type === "text" && p.text)
-          .map(p => p.text)
+        // Check for provider auth errors (401)
+        if (promptData?.info?.error) {
+          const err = promptData.info.error;
+          const errMsg = err.data?.message || err.name || "Unknown error";
+          return JSON.stringify({
+            session_id: sessionID,
+            status: "failed",
+            error: `[${err.name}] ${errMsg}`,
+          });
+        }
+
+        const result = promptData?.parts
+          ?.filter((p) => p.type === "text" && p.text)
+          .map((p) => p.text)
           .join("\n") || "";
 
         return JSON.stringify({

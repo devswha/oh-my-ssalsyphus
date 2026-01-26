@@ -9221,7 +9221,7 @@ class Doc {
 var version = {
   major: 4,
   minor: 3,
-  patch: 6
+  patch: 5
 };
 
 // node_modules/zod/v4/core/schemas.js
@@ -10507,7 +10507,7 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
         if (keyResult instanceof Promise) {
           throw new Error("Async schemas not supported in object keys currently");
         }
-        const checkNumericKey = typeof key === "string" && number.test(key) && keyResult.issues.length;
+        const checkNumericKey = typeof key === "string" && number.test(key) && keyResult.issues.length && keyResult.issues.some((iss) => iss.code === "invalid_type" && iss.expected === "number");
         if (checkNumericKey) {
           const retryResult = def.keyType._zod.run({ value: Number(key), issues: [] }, ctx);
           if (retryResult instanceof Promise) {
@@ -17878,7 +17878,7 @@ function finalize(ctx, schema) {
           }
         }
       }
-      if (refSchema.$ref && refSeen.def) {
+      if (refSchema.$ref) {
         for (const key in schema2) {
           if (key === "$ref" || key === "allOf")
             continue;
@@ -20830,7 +20830,7 @@ async function loadAllAgents(directory) {
 }
 function getAgentsDirectory() {
   const currentFile = fileURLToPath(import.meta.url);
-  const projectRoot = join2(dirname(currentFile), "..", "..");
+  const projectRoot = join2(dirname(currentFile), "..");
   return join2(projectRoot, "assets", "agents");
 }
 
@@ -21717,19 +21717,23 @@ function createBackgroundManager(ctx, config2) {
         const fullPrompt = systemPrompt ? `${systemPrompt}
 
 ${prompt}` : prompt;
-        await ctx.client.session.prompt({
+        const promptResp = await ctx.client.session.prompt({
           path: { id: sessionID },
           body: {
             parts: [{ type: "text", text: fullPrompt }]
           },
           query: { directory: ctx.directory }
         });
-        const messagesResp = await ctx.client.session.messages({
-          path: { id: sessionID }
-        });
-        const messages = messagesResp.data ?? [];
-        const lastAssistant = [...messages].reverse().find((m) => m.info?.role === "assistant");
-        const result = lastAssistant?.parts?.filter((p) => p.type === "text" && p.text).map((p) => p.text).join(`
+        const promptData = promptResp.data;
+        if (promptResp.error) {
+          throw new Error(`Prompt failed: ${JSON.stringify(promptResp.error)}`);
+        }
+        if (promptData?.info?.error) {
+          const err = promptData.info.error;
+          const errMsg = err.data?.message || err.name || "Unknown error";
+          throw new Error(`[${err.name}] ${errMsg}`);
+        }
+        const result = promptData?.parts?.filter((p) => p.type === "text" && p.text).map((p) => p.text).join(`
 `) || "";
         task.result = result;
         task.status = "completed";
@@ -21770,6 +21774,14 @@ ${prompt}` : prompt;
       return false;
     task.status = "cancelled";
     task.completedAt = Date.now();
+    if (task.sessionID) {
+      ctx.client.session.abort({
+        path: { id: task.sessionID },
+        query: { directory: ctx.directory }
+      }).catch((err) => {
+        log(`Failed to abort session for task ${taskId}`, { error: String(err) });
+      });
+    }
     log(`Background task cancelled`, { taskId });
     return true;
   };
@@ -21781,6 +21793,14 @@ ${prompt}` : prompt;
           task.status = "cancelled";
           task.completedAt = Date.now();
           count++;
+          if (task.sessionID) {
+            ctx.client.session.abort({
+              path: { id: task.sessionID },
+              query: { directory: ctx.directory }
+            }).catch((err) => {
+              log(`Failed to abort session for task ${task.id}`, { error: String(err) });
+            });
+          }
         }
       }
     }
@@ -34200,8 +34220,8 @@ Use \`background_output\` to get results. Prompts MUST be in English.`,
   };
 }
 
-// src/tools/call-omo-agent.ts
-function createCallOmoAgent(ctx, manager) {
+// src/tools/call-omco-agent.ts
+function createCallOmcoAgent(ctx, manager) {
   const agentNames = listAgentNames();
   const agentList = agentNames.map((name) => {
     const agent = getAgent(name);
@@ -34257,19 +34277,31 @@ ${prompt}`;
         const sessionID = sessionResp.data?.id ?? sessionResp.id;
         if (!sessionID)
           throw new Error("Failed to create session");
-        await ctx.client.session.prompt({
+        const promptResp = await ctx.client.session.prompt({
           path: { id: sessionID },
           body: {
             parts: [{ type: "text", text: enhancedPrompt }]
           },
           query: { directory: ctx.directory }
         });
-        const messagesResp = await ctx.client.session.messages({
-          path: { id: sessionID }
-        });
-        const messages = messagesResp.data ?? [];
-        const lastAssistant = [...messages].reverse().find((m) => m.info?.role === "assistant");
-        const result = lastAssistant?.parts?.filter((p) => p.type === "text" && p.text).map((p) => p.text).join(`
+        if (promptResp.error) {
+          return JSON.stringify({
+            session_id: sessionID,
+            status: "failed",
+            error: `Prompt failed: ${JSON.stringify(promptResp.error)}`
+          });
+        }
+        const promptData = promptResp.data;
+        if (promptData?.info?.error) {
+          const err = promptData.info.error;
+          const errMsg = err.data?.message || err.name || "Unknown error";
+          return JSON.stringify({
+            session_id: sessionID,
+            status: "failed",
+            error: `[${err.name}] ${errMsg}`
+          });
+        }
+        const result = promptData?.parts?.filter((p) => p.type === "text" && p.text).map((p) => p.text).join(`
 `) || "";
         return JSON.stringify({
           session_id: sessionID,
@@ -34288,9 +34320,9 @@ ${prompt}`;
 
 // src/config/model-resolver.ts
 var HARDCODED_TIER_DEFAULTS = {
-  haiku: "github-copilot/claude-haiku-4.5",
-  sonnet: "github-copilot/claude-sonnet-4.5",
-  opus: "github-copilot/claude-opus-4.5"
+  haiku: "github-copilot/claude-haiku-4",
+  sonnet: "github-copilot/claude-sonnet-4",
+  opus: "github-copilot/claude-opus-4"
 };
 function isValidModelFormat(model) {
   return /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(model);
@@ -34441,7 +34473,7 @@ function loadAllSkills(directory) {
 
 // src/skills/index.ts
 var __dirname2 = dirname2(fileURLToPath2(import.meta.url));
-var SKILLS_DIR = join4(__dirname2, "../../assets/skills");
+var SKILLS_DIR = join4(__dirname2, "../assets/skills");
 var skillsCache = null;
 function getSkillsCache() {
   if (!skillsCache) {
@@ -36976,7 +37008,7 @@ function createSystemPromptInjector(_ctx) {
 }
 
 // src/hooks/remember-tag-processor.ts
-var DEFAULT_TOOLS = ["Task", "task", "call_omo_agent"];
+var DEFAULT_TOOLS = ["Task", "task", "call_omco_agent"];
 function createRememberTagProcessor(ctx, options = {}) {
   const taskToolOnly = options.taskToolOnly ?? true;
   const toolNames = options.toolNames ?? DEFAULT_TOOLS;
@@ -38235,7 +38267,7 @@ var OmoOmcsPlugin = async (ctx) => {
   console.log("[omco] Config loaded:", pluginConfig);
   const backgroundManager = createBackgroundManager(ctx, pluginConfig.background_task);
   const backgroundTools = createBackgroundTools(backgroundManager, ctx.client);
-  const callOmoAgent = createCallOmoAgent(ctx, backgroundManager);
+  const callOmcoAgent = createCallOmcoAgent(ctx, backgroundManager);
   const systemPromptInjector = createSystemPromptInjector(ctx);
   const skillInjector = createSkillInjector(ctx);
   const ralphLoop = createRalphLoopHook(ctx, {
@@ -38358,7 +38390,7 @@ var OmoOmcsPlugin = async (ctx) => {
     },
     tool: {
       ...backgroundTools,
-      call_omo_agent: callOmoAgent
+      call_omco_agent: callOmcoAgent
     }
   };
 };
