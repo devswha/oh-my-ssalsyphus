@@ -1,6 +1,7 @@
 import { tool, type PluginInput, type ToolDefinition } from "@opencode-ai/plugin";
-import type { BackgroundManager } from "./background-manager";
+import type { BackgroundManager, ModelConfig } from "./background-manager";
 import { getAgent, listAgentNames, getCanonicalName, isAlias } from "../agents";
+import { log } from "../shared/logger";
 
 export function createCallOmcoAgent(ctx: PluginInput, manager: BackgroundManager): ToolDefinition {
   // Generate dynamic agent list for description
@@ -39,19 +40,19 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
         });
       }
 
-      // OMCO-003: Model tier resolution
-      // Note: When SDK supports model parameter, we can use agent.model here
-      // For now, the SDK will use default model tier based on session configuration
-
       // OMCO-002: Inject agent system prompt
       const enhancedPrompt = `${agent.systemPrompt}\n\n---\n\n${prompt}`;
+
+      // OMCO-003: Get parent session model to inherit provider/model
+      const parentModel = await manager.getParentSessionModel(context.sessionID);
 
       if (run_in_background) {
         const task = await manager.createTask(
           context.sessionID,
           description,
           enhancedPrompt,
-          subagent_type
+          subagent_type,
+          parentModel
         );
 
         return JSON.stringify({
@@ -74,11 +75,22 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
         const sessionID = (sessionResp.data as { id?: string })?.id ?? (sessionResp as { id?: string }).id;
         if (!sessionID) throw new Error("Failed to create session");
 
+        // Build prompt body with parent model if available
+        const promptBody: {
+          parts: Array<{ type: "text"; text: string }>;
+          model?: ModelConfig;
+        } = {
+          parts: [{ type: "text" as const, text: enhancedPrompt }],
+        };
+
+        if (parentModel) {
+          promptBody.model = parentModel;
+          log(`Using parent model for sync agent call`, { subagent_type, ...parentModel });
+        }
+
         const promptResp = await ctx.client.session.prompt({
           path: { id: sessionID },
-          body: {
-            parts: [{ type: "text", text: enhancedPrompt }],
-          },
+          body: promptBody,
           query: { directory: ctx.directory },
         });
 

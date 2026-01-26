@@ -15,18 +15,25 @@ export interface BackgroundTask {
   completedAt?: number;
 }
 
+export interface ModelConfig {
+  providerID: string;
+  modelID: string;
+}
+
 export interface BackgroundManager {
   createTask: (
     parentSessionID: string,
     description: string,
     prompt: string,
-    agent: string
+    agent: string,
+    model?: ModelConfig
   ) => Promise<BackgroundTask>;
   getTask: (taskId: string) => BackgroundTask | undefined;
   getTasksByParentSession: (sessionID: string) => BackgroundTask[];
   cancelTask: (taskId: string) => boolean;
   cancelAllTasks: (parentSessionID?: string) => number;
   waitForTask: (taskId: string, timeoutMs?: number) => Promise<BackgroundTask>;
+  getParentSessionModel: (parentSessionID: string) => Promise<ModelConfig | undefined>;
 }
 
 let taskCounter = 0;
@@ -42,6 +49,9 @@ export function createBackgroundManager(
 ): BackgroundManager {
   const tasks = new Map<string, BackgroundTask>();
   const defaultConcurrency = config?.defaultConcurrency ?? 5;
+  
+  // Cache for parent session models to avoid repeated API calls
+  const modelCache = new Map<string, ModelConfig>();
 
   const getRunningCount = (parentSessionID?: string): number => {
     let count = 0;
@@ -55,11 +65,58 @@ export function createBackgroundManager(
     return count;
   };
 
+  /**
+   * Get the model configuration from the parent session
+   * This allows subagents to inherit the same provider/model as the main session
+   */
+  const getParentSessionModel = async (parentSessionID: string): Promise<ModelConfig | undefined> => {
+    // Check cache first
+    if (modelCache.has(parentSessionID)) {
+      return modelCache.get(parentSessionID);
+    }
+
+    try {
+      // Get messages from session - assistant messages contain providerID and modelID
+      const messagesResp = await ctx.client.session.messages({
+        path: { id: parentSessionID },
+        query: { directory: ctx.directory },
+      });
+
+      const messages = messagesResp.data as Array<{
+        info: {
+          role: string;
+          providerID?: string;
+          modelID?: string;
+        };
+      }> | undefined;
+
+      // Find the most recent assistant message (it has model info)
+      const assistantMsg = messages?.find(m => m.info.role === "assistant" && m.info.providerID && m.info.modelID);
+      
+      if (assistantMsg?.info.providerID && assistantMsg?.info.modelID) {
+        const model: ModelConfig = {
+          providerID: assistantMsg.info.providerID,
+          modelID: assistantMsg.info.modelID,
+        };
+        modelCache.set(parentSessionID, model);
+        log(`Got parent session model from messages`, { parentSessionID, ...model });
+        return model;
+      }
+
+      log(`Parent session has no assistant messages with model info`, { parentSessionID });
+      return undefined;
+    } catch (err) {
+      log(`Failed to get parent session model`, { parentSessionID, error: String(err) });
+      return undefined;
+    }
+  };
+
   const createTask = async (
     parentSessionID: string,
     description: string,
     prompt: string,
-    agent: string
+    agent: string,
+    model?: ModelConfig
   ): Promise<BackgroundTask> => {
     const runningCount = getRunningCount();
     if (runningCount >= defaultConcurrency) {
@@ -78,6 +135,9 @@ export function createBackgroundManager(
     tasks.set(taskId, task);
 
     log(`Background task created`, { taskId, description, agent });
+
+    // Get model from parent session if not provided
+    const resolvedModel = model || await getParentSessionModel(parentSessionID);
 
     (async () => {
       try {
@@ -100,11 +160,23 @@ export function createBackgroundManager(
         const systemPrompt = agentDef?.systemPrompt || "";
         const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
 
+        // Build prompt body with optional model
+        const promptBody: {
+          parts: Array<{ type: "text"; text: string }>;
+          model?: { providerID: string; modelID: string };
+        } = {
+          parts: [{ type: "text" as const, text: fullPrompt }],
+        };
+
+        // Include model if available - this ensures subagent uses same provider as parent
+        if (resolvedModel) {
+          promptBody.model = resolvedModel;
+          log(`Using parent model for subagent`, { taskId, ...resolvedModel });
+        }
+
         const promptResp = await ctx.client.session.prompt({
           path: { id: sessionID },
-          body: {
-            parts: [{ type: "text", text: fullPrompt }],
-          },
+          body: promptBody,
           query: { directory: ctx.directory },
         });
 
@@ -243,5 +315,6 @@ export function createBackgroundManager(
     cancelTask,
     cancelAllTasks,
     waitForTask,
+    getParentSessionModel,
   };
 }
