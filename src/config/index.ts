@@ -326,5 +326,8 @@ export function loadConfig(directory: string): OmoOmcsConfig {
       delegationEnforcement: 'warn',
       auditLogEnabled: true,
     },
+    sisyphus_agent: {
+      disabled: false,
+    },
   };
 }

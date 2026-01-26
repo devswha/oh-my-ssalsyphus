@@ -7,7 +7,8 @@ import type { Skill } from './types.js';
  * Parses YAML between --- markers
  */
 function parseFrontmatter(content: string): { metadata: Record<string, any>; body: string } {
-  const frontmatterRegex = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
+  // Allow optional trailing newline after closing --- and optional body
+  const frontmatterRegex = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
   const match = content.match(frontmatterRegex);
 
   if (!match) {

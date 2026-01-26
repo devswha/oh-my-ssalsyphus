@@ -1046,6 +1046,9 @@ async function initializeAgents(): Promise<void> {
 function initializeAgentsSync(): void {
   if (initialized) return;
 
+  // Set initialized FIRST to prevent async race condition
+  initialized = true;
+
   // Start with hardcoded agents + aliases
   agents = { ...HARDCODED_AGENTS };
   for (const [alias, canonical] of Object.entries(AGENT_ALIASES)) {
@@ -1058,8 +1061,6 @@ function initializeAgentsSync(): void {
   initializeAgents().catch(() => {
     // Silently ignore errors, hardcoded agents are already loaded
   });
-
-  initialized = true;
 }
 
 // Initialize synchronously on module load for backward compatibility

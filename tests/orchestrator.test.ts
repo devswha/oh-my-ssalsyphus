@@ -256,18 +256,18 @@ describe("Orchestrator Integration", () => {
 
       await handler(mockConfig);
 
-      // Models follow "provider/model-name" format from model-resolver
+      // Models match mockPluginConfig.model_mapping.tierDefaults
       expect(mockConfig.agent?.["architect"]?.model).toBe(
-        "github-copilot/claude-opus-4.5"
+        "anthropic/claude-opus-4-5-20251101"
       );
       expect(mockConfig.agent?.["architect-low"]?.model).toBe(
-        "github-copilot/claude-haiku-4.5"
+        "anthropic/claude-3-5-haiku-20241022"
       );
       expect(mockConfig.agent?.["executor"]?.model).toBe(
-        "github-copilot/claude-sonnet-4.5"
+        "anthropic/claude-3-5-sonnet-20241022"
       );
       expect(mockConfig.agent?.["executor-high"]?.model).toBe(
-        "github-copilot/claude-opus-4.5"
+        "anthropic/claude-opus-4-5-20251101"
       );
     });
 
