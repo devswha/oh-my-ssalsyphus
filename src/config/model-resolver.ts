@@ -29,25 +29,51 @@ export interface ModelResolutionResult {
   originalTier?: ModelTier;
 }
 
+/**
+ * Default tier-to-model mapping.
+ * These use generic names - configure model_mapping.tierDefaults in
+ * ~/.config/opencode/oh-my-opencode.json for your specific provider.
+ *
+ * Example config:
+ * {
+ *   "model_mapping": {
+ *     "tierDefaults": {
+ *       "haiku": "google/gemini-2.0-flash",
+ *       "sonnet": "anthropic/claude-sonnet-4",
+ *       "opus": "anthropic/claude-opus-4"
+ *     }
+ *   }
+ * }
+ */
 export const HARDCODED_TIER_DEFAULTS: TierModelMapping = {
-  haiku: "github-copilot/claude-haiku-4",
-  sonnet: "github-copilot/claude-sonnet-4",
-  opus: "github-copilot/claude-opus-4",
+  haiku: "haiku",
+  sonnet: "sonnet",
+  opus: "opus",
 };
 
 /**
- * Check if model follows "provider/model-name" pattern
+ * Simple tier names that don't need provider prefix
+ */
+const SIMPLE_TIER_NAMES = new Set(["haiku", "sonnet", "opus"]);
+
+/**
+ * Check if model follows "provider/model-name" pattern or is a simple tier name
  */
 export function isValidModelFormat(model: string): boolean {
+  // Allow simple tier names
+  if (SIMPLE_TIER_NAMES.has(model.toLowerCase())) {
+    return true;
+  }
+  // Standard provider/model format
   return /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(model);
 }
 
 /**
- * Log warning if invalid format
+ * Log warning if invalid format (skip for simple tier names)
  */
 export function validateModelFormat(model: string, context: string): void {
   if (!isValidModelFormat(model)) {
-    warn(`[model-resolver] [${context}] Model "${model}" does not follow "provider/model-name" format`);
+    warn(`[model-resolver] [${context}] Model "${model}" does not follow "provider/model-name" format. Configure model_mapping.tierDefaults in oh-my-opencode.json`);
   }
 }
 
