@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "bin": {
+    "omco-setup": "./bin/omco-setup.js",
     "omco-doctor": "./bin/doctor.js",
     "oh-my-claudecode-opencode": "./bin/doctor.js"
   },
@@ -23,7 +24,7 @@
     "./schema.json": "./assets/omco.schema.json"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun --format esm && bun build bin/doctor.ts --outfile bin/doctor.js --target node --format esm && tsc --emitDeclarationOnly",
+    "build": "bun build src/index.ts --outdir dist --target bun --format esm && bun build bin/doctor.ts --outfile bin/doctor.js --target node --format esm && bun build bin/omco-setup.ts --outfile bin/omco-setup.js --target node --format esm && tsc --emitDeclarationOnly",
     "build:watch": "bun build src/index.ts --outdir dist --target bun --format esm --watch",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
