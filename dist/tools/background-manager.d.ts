@@ -1,5 +1,6 @@
 import type { PluginInput } from "@opencode-ai/plugin";
 import type { BackgroundTaskConfig } from "../config";
+import type { ModelResolutionService } from "./model-resolution-service";
 export interface BackgroundTask {
     id: string;
     status: "running" | "completed" | "failed" | "cancelled";
@@ -24,4 +25,4 @@ export interface BackgroundManager {
     waitForTask: (taskId: string, timeoutMs?: number) => Promise<BackgroundTask>;
     getParentSessionModel: (parentSessionID: string) => Promise<ModelConfig | undefined>;
 }
-export declare function createBackgroundManager(ctx: PluginInput, config?: BackgroundTaskConfig): BackgroundManager;
+export declare function createBackgroundManager(ctx: PluginInput, config?: BackgroundTaskConfig, modelService?: ModelResolutionService): BackgroundManager;

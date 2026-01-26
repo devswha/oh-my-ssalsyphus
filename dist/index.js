@@ -21669,7 +21669,7 @@ function generateTaskId() {
   taskCounter++;
   return `bg_${Date.now().toString(36)}_${taskCounter.toString(36)}`;
 }
-function createBackgroundManager(ctx, config2) {
+function createBackgroundManager(ctx, config2, modelService) {
   const tasks = new Map;
   const defaultConcurrency = config2?.defaultConcurrency ?? 5;
   const modelCache = new Map;
@@ -21726,7 +21726,14 @@ function createBackgroundManager(ctx, config2) {
     };
     tasks.set(taskId, task);
     log(`Background task created`, { taskId, description, agent });
-    const resolvedModel = model || await getParentSessionModel(parentSessionID);
+    const parentModel = model || await getParentSessionModel(parentSessionID);
+    const resolvedModel = modelService ? modelService.resolveModelForAgent(agent, parentModel) : parentModel;
+    if (resolvedModel && resolvedModel !== parentModel) {
+      log(`[background-manager] Using tier-mapped model for ${agent}`, {
+        providerID: resolvedModel.providerID,
+        modelID: resolvedModel.modelID
+      });
+    }
     (async () => {
       try {
         const sessionResp = await ctx.client.session.create({
@@ -34256,7 +34263,7 @@ Use \`background_output\` to get results. Prompts MUST be in English.`,
 }
 
 // src/tools/call-omco-agent.ts
-function createCallOmcoAgent(ctx, manager) {
+function createCallOmcoAgent(ctx, manager, modelService) {
   const agentNames = listAgentNames();
   const agentList = agentNames.map((name) => {
     const agent = getAgent(name);
@@ -34293,8 +34300,15 @@ Prompts MUST be in English. Use \`background_output\` for async results.`,
 
 ${prompt}`;
       const parentModel = await manager.getParentSessionModel(context.sessionID);
+      const resolvedModel = modelService ? modelService.resolveModelForAgent(subagent_type, parentModel) : parentModel;
+      if (resolvedModel && resolvedModel !== parentModel) {
+        log(`[call-omco-agent] Using tier-mapped model for ${subagent_type}`, {
+          providerID: resolvedModel.providerID,
+          modelID: resolvedModel.modelID
+        });
+      }
       if (run_in_background) {
-        const task = await manager.createTask(context.sessionID, description, enhancedPrompt, subagent_type, parentModel);
+        const task = await manager.createTask(context.sessionID, description, enhancedPrompt, subagent_type, resolvedModel);
         return JSON.stringify({
           task_id: task.id,
           session_id: task.sessionID,
@@ -34316,9 +34330,9 @@ ${prompt}`;
         const promptBody = {
           parts: [{ type: "text", text: enhancedPrompt }]
         };
-        if (parentModel) {
-          promptBody.model = parentModel;
-          log(`Using parent model for sync agent call`, { subagent_type, ...parentModel });
+        if (resolvedModel) {
+          promptBody.model = resolvedModel;
+          log(`Using resolved model for sync agent call`, { subagent_type, ...resolvedModel });
         }
         const promptResp = await ctx.client.session.prompt({
           path: { id: sessionID },
@@ -34436,6 +34450,51 @@ class ModelResolver {
   getTierDefaults() {
     return { ...this.tierDefaults };
   }
+}
+
+// src/tools/model-resolution-service.ts
+function parseModelString(model) {
+  if (!model.includes("/")) {
+    return;
+  }
+  const [providerID, ...rest] = model.split("/");
+  const modelID = rest.join("/");
+  if (!providerID || !modelID) {
+    return;
+  }
+  return { providerID, modelID };
+}
+function createModelResolutionService(modelMappingConfig, agentOverrides) {
+  const resolver = new ModelResolver(modelMappingConfig);
+  const debugLogging = modelMappingConfig?.debugLogging ?? false;
+  const tierDefaults = resolver.getTierDefaults();
+  const hasConfiguredTiers = Object.values(tierDefaults).some((m) => m.includes("/"));
+  const resolveModelForAgent = (agentName, fallbackModel) => {
+    const agentDef = getAgent(agentName);
+    const agentTier = agentDef?.model;
+    const agentOverride = agentOverrides?.[agentName];
+    const resolution = resolver.resolve(agentName, agentTier, agentOverride);
+    const modelConfig = parseModelString(resolution.model);
+    if (modelConfig) {
+      if (debugLogging) {
+        log(`[model-resolution] Resolved ${agentName}: ${resolution.model} (source: ${resolution.source})`);
+      }
+      return modelConfig;
+    }
+    if (debugLogging) {
+      log(`[model-resolution] ${agentName}: No provider mapping for "${resolution.model}", using fallback`, {
+        fallback: fallbackModel ? `${fallbackModel.providerID}/${fallbackModel.modelID}` : "none"
+      });
+    }
+    return fallbackModel;
+  };
+  const isTierMappingConfigured = () => {
+    return hasConfiguredTiers;
+  };
+  return {
+    resolveModelForAgent,
+    isTierMappingConfigured
+  };
 }
 
 // src/skills/index.ts
@@ -38323,9 +38382,13 @@ function resumeSession(sessionId) {
 var OmoOmcsPlugin = async (ctx) => {
   const pluginConfig = loadConfig(ctx.directory);
   console.log("[omco] Config loaded:", pluginConfig);
-  const backgroundManager = createBackgroundManager(ctx, pluginConfig.background_task);
+  const modelService = createModelResolutionService(pluginConfig.model_mapping, pluginConfig.agents);
+  if (modelService.isTierMappingConfigured()) {
+    log("[omco] Model tier mapping configured - agents will use tier-specific models");
+  }
+  const backgroundManager = createBackgroundManager(ctx, pluginConfig.background_task, modelService);
   const backgroundTools = createBackgroundTools(backgroundManager, ctx.client);
-  const callOmcoAgent = createCallOmcoAgent(ctx, backgroundManager);
+  const callOmcoAgent = createCallOmcoAgent(ctx, backgroundManager, modelService);
   const systemPromptInjector = createSystemPromptInjector(ctx);
   const skillInjector = createSkillInjector(ctx);
   const ralphLoop = createRalphLoopHook(ctx, {
